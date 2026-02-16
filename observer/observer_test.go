@@ -30,6 +30,12 @@ func TestObserverDispatchOrder(t *testing.T) {
 	onEnterAny := []func(from int, sp struct{}, to int, e string, ep struct{}){
 		func(from int, _ struct{}, to int, _ string, _ struct{}) { rec.add("enter:any", from, to) },
 	}
+	onStepAny := []func(from int, sp struct{}, to int, e string, ep struct{}){
+		func(from int, _ struct{}, to int, _ string, _ struct{}) { rec.add("step:any", from, to) },
+	}
+	onStep := map[transition[int]][]func(from int, sp struct{}, to int, e string, ep struct{}){
+		transition[int]{from: 1, to: 2}: {func(from int, _ struct{}, to int, _ string, _ struct{}) { rec.add("step:1->2", from, to) }},
+	}
 
 	onExit := map[int][]func(from int, sp struct{}, to int, e string, ep struct{}){
 		1: {func(from int, _ struct{}, to int, _ string, _ struct{}) { rec.add("exit:1", from, to) }},
@@ -40,6 +46,8 @@ func TestObserverDispatchOrder(t *testing.T) {
 
 	o := NewObserver[int, string, struct{}, struct{}](Config[int, string, struct{}, struct{}]{
 		Executor:   exec,
+		OnStepAny:  onStepAny,
+		OnStep:     onStep,
 		OnExitAny:  onExitAny,
 		OnEnterAny: onEnterAny,
 		OnExit:     onExit,
@@ -48,6 +56,8 @@ func TestObserverDispatchOrder(t *testing.T) {
 	o.OnStep(1, struct{}{}, 2, "e", struct{}{})
 
 	want := []call{
+		{kind: "step:any", from: 1, to: 2},
+		{kind: "step:1->2", from: 1, to: 2},
 		{kind: "exit:any", from: 1, to: 2},
 		{kind: "exit:1", from: 1, to: 2},
 		{kind: "enter:any", from: 1, to: 2},

@@ -110,6 +110,18 @@ func (b *NFABuilder[State, Symbol, SP, EP]) WithExecutor(exec Executor[[]State, 
 	return b
 }
 
+// WithOnStepAny registers a callback for every step.
+func (b *NFABuilder[State, Symbol, SP, EP]) WithOnStepAny(f func(from []State, sp SP, to []State, e Symbol, ep EP)) *NFABuilder[State, Symbol, SP, EP] {
+	b.obs.OnStepAny(f)
+	return b
+}
+
+// WithOnStep registers a callback for a specific transition from -> to.
+func (b *NFABuilder[State, Symbol, SP, EP]) WithOnStep(from []State, to []State, f func(from []State, sp SP, to []State, e Symbol, ep EP)) *NFABuilder[State, Symbol, SP, EP] {
+	b.obs.OnStep(from, to, f)
+	return b
+}
+
 // WithOnExit registers a callback when leaving state s.
 func (b *NFABuilder[State, Symbol, SP, EP]) WithOnExit(s []State, f func(from []State, sp SP, to []State, e Symbol, ep EP)) *NFABuilder[State, Symbol, SP, EP] {
 	b.obs.OnExit(s, f)
@@ -190,8 +202,16 @@ type nfaStateCallback[State comparable, Symbol comparable, SP any, EP any] struc
 	f     func(from []State, sp SP, to []State, e Symbol, ep EP)
 }
 
+type nfaTransitionCallback[State comparable, Symbol comparable, SP any, EP any] struct {
+	from []State
+	to   []State
+	f    func(from []State, sp SP, to []State, e Symbol, ep EP)
+}
+
 type nfaObserverBuilder[State comparable, Symbol comparable, SP any, EP any] struct {
 	exec       Executor[[]State, Symbol, SP, EP]
+	onStepAny  []func(from []State, sp SP, to []State, e Symbol, ep EP)
+	onStep     []nfaTransitionCallback[State, Symbol, SP, EP]
 	onExitAny  []func(from []State, sp SP, to []State, e Symbol, ep EP)
 	onEnterAny []func(from []State, sp SP, to []State, e Symbol, ep EP)
 	onExit     []nfaStateCallback[State, Symbol, SP, EP]
@@ -200,6 +220,7 @@ type nfaObserverBuilder[State comparable, Symbol comparable, SP any, EP any] str
 
 func newNFAObserverBuilder[State comparable, Symbol comparable, SP any, EP any]() *nfaObserverBuilder[State, Symbol, SP, EP] {
 	return &nfaObserverBuilder[State, Symbol, SP, EP]{
+		onStepAny:  []func(from []State, sp SP, to []State, e Symbol, ep EP){},
 		onExitAny:  []func(from []State, sp SP, to []State, e Symbol, ep EP){},
 		onEnterAny: []func(from []State, sp SP, to []State, e Symbol, ep EP){},
 	}
@@ -207,6 +228,20 @@ func newNFAObserverBuilder[State comparable, Symbol comparable, SP any, EP any](
 
 func (b *nfaObserverBuilder[State, Symbol, SP, EP]) WithExecutor(exec Executor[[]State, Symbol, SP, EP]) *nfaObserverBuilder[State, Symbol, SP, EP] {
 	b.exec = exec
+	return b
+}
+
+func (b *nfaObserverBuilder[State, Symbol, SP, EP]) OnStepAny(f func(from []State, sp SP, to []State, e Symbol, ep EP)) *nfaObserverBuilder[State, Symbol, SP, EP] {
+	b.onStepAny = append(b.onStepAny, f)
+	return b
+}
+
+func (b *nfaObserverBuilder[State, Symbol, SP, EP]) OnStep(from []State, to []State, f func(from []State, sp SP, to []State, e Symbol, ep EP)) *nfaObserverBuilder[State, Symbol, SP, EP] {
+	b.onStep = append(b.onStep, nfaTransitionCallback[State, Symbol, SP, EP]{
+		from: cloneStates(from),
+		to:   cloneStates(to),
+		f:    f,
+	})
 	return b
 }
 
@@ -236,6 +271,8 @@ func (b *nfaObserverBuilder[State, Symbol, SP, EP]) Build() (engine.Observer[[]S
 	}
 	return &nfaObserver[State, Symbol, SP, EP]{
 		exec:       b.exec,
+		onStepAny:  b.onStepAny,
+		onStep:     b.onStep,
 		onExitAny:  b.onExitAny,
 		onEnterAny: b.onEnterAny,
 		onExit:     b.onExit,
@@ -245,6 +282,8 @@ func (b *nfaObserverBuilder[State, Symbol, SP, EP]) Build() (engine.Observer[[]S
 
 type nfaObserver[State comparable, Symbol comparable, SP any, EP any] struct {
 	exec       Executor[[]State, Symbol, SP, EP]
+	onStepAny  []func(from []State, sp SP, to []State, e Symbol, ep EP)
+	onStep     []nfaTransitionCallback[State, Symbol, SP, EP]
 	onExitAny  []func(from []State, sp SP, to []State, e Symbol, ep EP)
 	onEnterAny []func(from []State, sp SP, to []State, e Symbol, ep EP)
 	onExit     []nfaStateCallback[State, Symbol, SP, EP]
@@ -252,6 +291,14 @@ type nfaObserver[State comparable, Symbol comparable, SP any, EP any] struct {
 }
 
 func (o *nfaObserver[State, Symbol, SP, EP]) OnStep(from []State, sp SP, to []State, e Symbol, ep EP) {
+	for _, f := range o.onStepAny {
+		o.exec.Execute(f, from, sp, to, e, ep)
+	}
+	for _, item := range o.onStep {
+		if stateSetEqual(item.from, from) && stateSetEqual(item.to, to) {
+			o.exec.Execute(item.f, from, sp, to, e, ep)
+		}
+	}
 	for _, f := range o.onExitAny {
 		o.exec.Execute(f, from, sp, to, e, ep)
 	}

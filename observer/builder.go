@@ -14,6 +14,8 @@ type Builder[S comparable, E, SP, EP any] struct {
 func New[S comparable, E, SP, EP any]() *Builder[S, E, SP, EP] {
 	return &Builder[S, E, SP, EP]{
 		cfg: Config[S, E, SP, EP]{
+			OnStepAny:  []func(from S, sp SP, to S, e E, ep EP){},
+			OnStep:     map[transition[S]][]func(from S, sp SP, to S, e E, ep EP){},
 			OnExitAny:  []func(from S, sp SP, to S, e E, ep EP){},
 			OnEnterAny: []func(from S, sp SP, to S, e E, ep EP){},
 			OnExit:     map[S][]func(from S, sp SP, to S, e E, ep EP){},
@@ -30,6 +32,19 @@ func NewBuilder[S comparable, E, SP, EP any]() *Builder[S, E, SP, EP] {
 // WithExecutor replaces the executor.
 func (b *Builder[S, E, SP, EP]) WithExecutor(executor Executor[S, E, SP, EP]) *Builder[S, E, SP, EP] {
 	b.cfg.Executor = executor
+	return b
+}
+
+// OnStepAny registers a callback for every step.
+func (b *Builder[S, E, SP, EP]) OnStepAny(f func(from S, sp SP, to S, e E, ep EP)) *Builder[S, E, SP, EP] {
+	b.cfg.OnStepAny = append(b.cfg.OnStepAny, f)
+	return b
+}
+
+// OnStep registers a callback for a specific transition from -> to.
+func (b *Builder[S, E, SP, EP]) OnStep(from S, to S, f func(from S, sp SP, to S, e E, ep EP)) *Builder[S, E, SP, EP] {
+	key := transition[S]{from: from, to: to}
+	b.cfg.OnStep[key] = append(b.cfg.OnStep[key], f)
 	return b
 }
 

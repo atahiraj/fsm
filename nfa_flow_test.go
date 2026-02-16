@@ -134,6 +134,12 @@ func TestNFABuilderBuildEngineObserverOrder(t *testing.T) {
 		WithEpsilon(0, 1)
 
 	var order []string
+	b.WithOnStepAny(func(from []int, _ struct{}, to []int, _ string, _ struct{}) {
+		order = append(order, "step:any")
+	})
+	b.WithOnStep([]int{0, 1}, []int{1}, func(from []int, _ struct{}, to []int, _ string, _ struct{}) {
+		order = append(order, "step:[0 1]->[1]")
+	})
 	b.WithOnEnterAny(func(from []int, _ struct{}, to []int, _ string, _ struct{}) {
 		order = append(order, "enter:any")
 	})
@@ -146,11 +152,14 @@ func TestNFABuilderBuildEngineObserverOrder(t *testing.T) {
 		t.Fatalf("BuildEngine() error = %v", err)
 	}
 	e.Step("a", struct{}{})
-	if len(order) != 2 {
-		t.Fatalf("order len = %d, want 2", len(order))
+	if len(order) != 4 {
+		t.Fatalf("order len = %d, want 4", len(order))
 	}
-	if order[0] != "exit:any" || order[1] != "enter:any" {
-		t.Fatalf("order = %v, want [exit:any enter:any]", order)
+	want := []string{"step:any", "step:[0 1]->[1]", "exit:any", "enter:any"}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("order[%d] = %q, want %q", i, order[i], want[i])
+		}
 	}
 }
 

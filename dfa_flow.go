@@ -116,6 +116,18 @@ func (b *DFABuilder[State, Symbol, SP, EP]) WithExecutor(exec Executor[State, Sy
 	return b
 }
 
+// WithOnStepAny registers a callback for every step.
+func (b *DFABuilder[State, Symbol, SP, EP]) WithOnStepAny(f func(from State, sp SP, to State, e Symbol, ep EP)) *DFABuilder[State, Symbol, SP, EP] {
+	b.obs.OnStepAny(f)
+	return b
+}
+
+// WithOnStep registers a callback for a specific transition from -> to.
+func (b *DFABuilder[State, Symbol, SP, EP]) WithOnStep(from State, to State, f func(from State, sp SP, to State, e Symbol, ep EP)) *DFABuilder[State, Symbol, SP, EP] {
+	b.obs.OnStep(from, to, f)
+	return b
+}
+
 // WithOnExit registers a callback when leaving state s.
 func (b *DFABuilder[State, Symbol, SP, EP]) WithOnExit(s State, f func(from State, sp SP, to State, e Symbol, ep EP)) *DFABuilder[State, Symbol, SP, EP] {
 	b.obs.OnExit(s, f)

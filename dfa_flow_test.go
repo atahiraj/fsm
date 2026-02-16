@@ -148,6 +148,12 @@ func TestDFABuilderBuildEngineObserverOrder(t *testing.T) {
 		WithTransition(1, "b", 0)
 
 	var order []string
+	b.WithOnStepAny(func(from int, _ struct{}, to int, _ string, _ struct{}) {
+		order = append(order, "step:any")
+	})
+	b.WithOnStep(0, 1, func(from int, _ struct{}, to int, _ string, _ struct{}) {
+		order = append(order, "step:0->1")
+	})
 	b.WithOnEnterAny(func(from int, _ struct{}, to int, _ string, _ struct{}) {
 		order = append(order, "enter:any")
 	})
@@ -167,7 +173,7 @@ func TestDFABuilderBuildEngineObserverOrder(t *testing.T) {
 	}
 	e.Step("a", struct{}{})
 
-	wantOrder := []string{"exit:any", "exit:0", "enter:any", "enter:1"}
+	wantOrder := []string{"step:any", "step:0->1", "exit:any", "exit:0", "enter:any", "enter:1"}
 	if len(order) != len(wantOrder) {
 		t.Fatalf("order len = %d, want %d", len(order), len(wantOrder))
 	}
