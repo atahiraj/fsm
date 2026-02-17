@@ -123,15 +123,27 @@ func (b *NFABuilder[State, Symbol, SP, EP]) WithOnStep(from []State, to []State,
 	return b
 }
 
-// WithOnExit registers a callback when leaving state s.
+// WithOnExit registers a callback when leaving configuration s.
 func (b *NFABuilder[State, Symbol, SP, EP]) WithOnExit(s []State, f func(from []State, sp SP, e Symbol, ep EP)) *NFABuilder[State, Symbol, SP, EP] {
 	b.obs.OnExit(s, f)
 	return b
 }
 
-// WithOnEnter registers a callback when entering state s.
+// WithOnEnter registers a callback when entering configuration s.
 func (b *NFABuilder[State, Symbol, SP, EP]) WithOnEnter(s []State, f func(to []State, sp SP, e Symbol, ep EP)) *NFABuilder[State, Symbol, SP, EP] {
 	b.obs.OnEnter(s, f)
+	return b
+}
+
+// WithOnExitState registers a callback when a specific state exits the active set.
+func (b *NFABuilder[State, Symbol, SP, EP]) WithOnExitState(state State, f func(sp SP, e Symbol, ep EP)) *NFABuilder[State, Symbol, SP, EP] {
+	b.obs.OnExitState(state, f)
+	return b
+}
+
+// WithOnEnterState registers a callback when a specific state enters the active set.
+func (b *NFABuilder[State, Symbol, SP, EP]) WithOnEnterState(state State, f func(sp SP, e Symbol, ep EP)) *NFABuilder[State, Symbol, SP, EP] {
+	b.obs.OnEnterState(state, f)
 	return b
 }
 
@@ -144,6 +156,18 @@ func (b *NFABuilder[State, Symbol, SP, EP]) WithOnExitAny(f func(from []State, s
 // WithOnEnterAny registers a callback when entering any state.
 func (b *NFABuilder[State, Symbol, SP, EP]) WithOnEnterAny(f func(to []State, sp SP, e Symbol, ep EP)) *NFABuilder[State, Symbol, SP, EP] {
 	b.obs.OnEnterAny(f)
+	return b
+}
+
+// WithOnExitStateAny registers a callback when any state exits the active set.
+func (b *NFABuilder[State, Symbol, SP, EP]) WithOnExitStateAny(f func(state State, sp SP, e Symbol, ep EP)) *NFABuilder[State, Symbol, SP, EP] {
+	b.obs.OnExitStateAny(f)
+	return b
+}
+
+// WithOnEnterStateAny registers a callback when any state enters the active set.
+func (b *NFABuilder[State, Symbol, SP, EP]) WithOnEnterStateAny(f func(state State, sp SP, e Symbol, ep EP)) *NFABuilder[State, Symbol, SP, EP] {
+	b.obs.OnEnterStateAny(f)
 	return b
 }
 
@@ -223,21 +247,37 @@ type nfaTransitionCallback[State comparable, Symbol comparable, SP any, EP any] 
 	f    func(from []State, sp SP, to []State, e Symbol, ep EP)
 }
 
+type nfaExitSingleStateCallback[State comparable, Symbol comparable, SP any, EP any] struct {
+	state State
+	f     func(sp SP, e Symbol, ep EP)
+}
+
+type nfaEnterSingleStateCallback[State comparable, Symbol comparable, SP any, EP any] struct {
+	state State
+	f     func(sp SP, e Symbol, ep EP)
+}
+
 type nfaObserverBuilder[State comparable, Symbol comparable, SP any, EP any] struct {
-	exec       Executor[[]State, Symbol, SP, EP]
-	onStepAny  []func(from []State, sp SP, to []State, e Symbol, ep EP)
-	onStep     []nfaTransitionCallback[State, Symbol, SP, EP]
-	onExitAny  []func(from []State, sp SP, e Symbol, ep EP)
-	onEnterAny []func(to []State, sp SP, e Symbol, ep EP)
-	onExit     []nfaExitStateCallback[State, Symbol, SP, EP]
-	onEnter    []nfaEnterStateCallback[State, Symbol, SP, EP]
+	exec            Executor[[]State, Symbol, SP, EP]
+	onStepAny       []func(from []State, sp SP, to []State, e Symbol, ep EP)
+	onStep          []nfaTransitionCallback[State, Symbol, SP, EP]
+	onExitAny       []func(from []State, sp SP, e Symbol, ep EP)
+	onEnterAny      []func(to []State, sp SP, e Symbol, ep EP)
+	onExit          []nfaExitStateCallback[State, Symbol, SP, EP]
+	onEnter         []nfaEnterStateCallback[State, Symbol, SP, EP]
+	onExitStateAny  []func(state State, sp SP, e Symbol, ep EP)
+	onEnterStateAny []func(state State, sp SP, e Symbol, ep EP)
+	onExitState     []nfaExitSingleStateCallback[State, Symbol, SP, EP]
+	onEnterState    []nfaEnterSingleStateCallback[State, Symbol, SP, EP]
 }
 
 func newNFAObserverBuilder[State comparable, Symbol comparable, SP any, EP any]() *nfaObserverBuilder[State, Symbol, SP, EP] {
 	return &nfaObserverBuilder[State, Symbol, SP, EP]{
-		onStepAny:  []func(from []State, sp SP, to []State, e Symbol, ep EP){},
-		onExitAny:  []func(from []State, sp SP, e Symbol, ep EP){},
-		onEnterAny: []func(to []State, sp SP, e Symbol, ep EP){},
+		onStepAny:       []func(from []State, sp SP, to []State, e Symbol, ep EP){},
+		onExitAny:       []func(from []State, sp SP, e Symbol, ep EP){},
+		onEnterAny:      []func(to []State, sp SP, e Symbol, ep EP){},
+		onExitStateAny:  []func(state State, sp SP, e Symbol, ep EP){},
+		onEnterStateAny: []func(state State, sp SP, e Symbol, ep EP){},
 	}
 }
 
@@ -280,29 +320,57 @@ func (b *nfaObserverBuilder[State, Symbol, SP, EP]) OnEnterAny(f func(to []State
 	return b
 }
 
+func (b *nfaObserverBuilder[State, Symbol, SP, EP]) OnExitStateAny(f func(state State, sp SP, e Symbol, ep EP)) *nfaObserverBuilder[State, Symbol, SP, EP] {
+	b.onExitStateAny = append(b.onExitStateAny, f)
+	return b
+}
+
+func (b *nfaObserverBuilder[State, Symbol, SP, EP]) OnEnterStateAny(f func(state State, sp SP, e Symbol, ep EP)) *nfaObserverBuilder[State, Symbol, SP, EP] {
+	b.onEnterStateAny = append(b.onEnterStateAny, f)
+	return b
+}
+
+func (b *nfaObserverBuilder[State, Symbol, SP, EP]) OnExitState(state State, f func(sp SP, e Symbol, ep EP)) *nfaObserverBuilder[State, Symbol, SP, EP] {
+	b.onExitState = append(b.onExitState, nfaExitSingleStateCallback[State, Symbol, SP, EP]{state: state, f: f})
+	return b
+}
+
+func (b *nfaObserverBuilder[State, Symbol, SP, EP]) OnEnterState(state State, f func(sp SP, e Symbol, ep EP)) *nfaObserverBuilder[State, Symbol, SP, EP] {
+	b.onEnterState = append(b.onEnterState, nfaEnterSingleStateCallback[State, Symbol, SP, EP]{state: state, f: f})
+	return b
+}
+
 func (b *nfaObserverBuilder[State, Symbol, SP, EP]) Build() (engine.Observer[[]State, Symbol, SP, EP], error) {
 	if b.exec == nil {
 		return nil, errors.New("observer builder: executor is nil")
 	}
 	return &nfaObserver[State, Symbol, SP, EP]{
-		exec:       b.exec,
-		onStepAny:  b.onStepAny,
-		onStep:     b.onStep,
-		onExitAny:  b.onExitAny,
-		onEnterAny: b.onEnterAny,
-		onExit:     b.onExit,
-		onEnter:    b.onEnter,
+		exec:            b.exec,
+		onStepAny:       b.onStepAny,
+		onStep:          b.onStep,
+		onExitAny:       b.onExitAny,
+		onEnterAny:      b.onEnterAny,
+		onExit:          b.onExit,
+		onEnter:         b.onEnter,
+		onExitStateAny:  b.onExitStateAny,
+		onEnterStateAny: b.onEnterStateAny,
+		onExitState:     b.onExitState,
+		onEnterState:    b.onEnterState,
 	}, nil
 }
 
 type nfaObserver[State comparable, Symbol comparable, SP any, EP any] struct {
-	exec       Executor[[]State, Symbol, SP, EP]
-	onStepAny  []func(from []State, sp SP, to []State, e Symbol, ep EP)
-	onStep     []nfaTransitionCallback[State, Symbol, SP, EP]
-	onExitAny  []func(from []State, sp SP, e Symbol, ep EP)
-	onEnterAny []func(to []State, sp SP, e Symbol, ep EP)
-	onExit     []nfaExitStateCallback[State, Symbol, SP, EP]
-	onEnter    []nfaEnterStateCallback[State, Symbol, SP, EP]
+	exec            Executor[[]State, Symbol, SP, EP]
+	onStepAny       []func(from []State, sp SP, to []State, e Symbol, ep EP)
+	onStep          []nfaTransitionCallback[State, Symbol, SP, EP]
+	onExitAny       []func(from []State, sp SP, e Symbol, ep EP)
+	onEnterAny      []func(to []State, sp SP, e Symbol, ep EP)
+	onExit          []nfaExitStateCallback[State, Symbol, SP, EP]
+	onEnter         []nfaEnterStateCallback[State, Symbol, SP, EP]
+	onExitStateAny  []func(state State, sp SP, e Symbol, ep EP)
+	onEnterStateAny []func(state State, sp SP, e Symbol, ep EP)
+	onExitState     []nfaExitSingleStateCallback[State, Symbol, SP, EP]
+	onEnterState    []nfaEnterSingleStateCallback[State, Symbol, SP, EP]
 }
 
 func (o *nfaObserver[State, Symbol, SP, EP]) OnStep(from []State, sp SP, to []State, e Symbol, ep EP) {
@@ -346,6 +414,49 @@ func (o *nfaObserver[State, Symbol, SP, EP]) OnStep(from []State, sp SP, to []St
 			)
 		}
 	}
+
+	exited := stateSetDifferenceOrdered(from, to)
+	entered := stateSetDifferenceOrdered(to, from)
+
+	for _, state := range exited {
+		for _, f := range o.onExitStateAny {
+			st := state
+			fn := f
+			o.exec.Execute(
+				func(_ []State, sp SP, _ []State, e Symbol, ep EP) { fn(st, sp, e, ep) },
+				from, sp, to, e, ep,
+			)
+		}
+		for _, item := range o.onExitState {
+			if item.state == state {
+				fn := item.f
+				o.exec.Execute(
+					func(_ []State, sp SP, _ []State, e Symbol, ep EP) { fn(sp, e, ep) },
+					from, sp, to, e, ep,
+				)
+			}
+		}
+	}
+
+	for _, state := range entered {
+		for _, f := range o.onEnterStateAny {
+			st := state
+			fn := f
+			o.exec.Execute(
+				func(_ []State, sp SP, _ []State, e Symbol, ep EP) { fn(st, sp, e, ep) },
+				from, sp, to, e, ep,
+			)
+		}
+		for _, item := range o.onEnterState {
+			if item.state == state {
+				fn := item.f
+				o.exec.Execute(
+					func(_ []State, sp SP, _ []State, e Symbol, ep EP) { fn(sp, e, ep) },
+					from, sp, to, e, ep,
+				)
+			}
+		}
+	}
 }
 
 func cloneStates[State comparable](states []State) []State {
@@ -359,4 +470,18 @@ func cloneStates[State comparable](states []State) []State {
 
 func stateSetEqual[State comparable](a, b []State) bool {
 	return set.New(a...).Equals(set.New(b...))
+}
+
+func stateSetDifferenceOrdered[State comparable](left []State, right []State) []State {
+	rightSet := set.New(right...)
+	seen := set.New[State]()
+	out := make([]State, 0, len(left))
+	for _, state := range left {
+		if rightSet.Has(state) || seen.Has(state) {
+			continue
+		}
+		seen.Add(state)
+		out = append(out, state)
+	}
+	return out
 }

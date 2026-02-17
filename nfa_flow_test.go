@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	nfapkg "github.com/stnhrsprkwns/fsm/nfa"
@@ -161,6 +162,49 @@ func TestNFABuilderBuildEngineObserverOrder(t *testing.T) {
 	for i := range want {
 		if order[i] != want[i] {
 			t.Fatalf("order[%d] = %q, want %q", i, order[i], want[i])
+		}
+	}
+}
+
+func TestNFABuilderStateCallbacks(t *testing.T) {
+	b := NFA[int, string, struct{}, struct{}]()
+	b.WithStart(0).
+		WithAccepting(1).
+		WithTransition(0, "a", 1)
+
+	var got []string
+	b.WithOnExitStateAny(func(state int, _ struct{}, _ string, _ struct{}) {
+		got = append(got, "exit:any:"+strconv.Itoa(state))
+	})
+	b.WithOnExitState(0, func(_ struct{}, _ string, _ struct{}) {
+		got = append(got, "exit:0")
+	})
+	b.WithOnExitState(2, func(_ struct{}, _ string, _ struct{}) {
+		got = append(got, "exit:2")
+	})
+	b.WithOnEnterStateAny(func(state int, _ struct{}, _ string, _ struct{}) {
+		got = append(got, "enter:any:"+strconv.Itoa(state))
+	})
+	b.WithOnEnterState(1, func(_ struct{}, _ string, _ struct{}) {
+		got = append(got, "enter:1")
+	})
+	b.WithOnEnterState(3, func(_ struct{}, _ string, _ struct{}) {
+		got = append(got, "enter:3")
+	})
+
+	e, err := b.BuildEngine()
+	if err != nil {
+		t.Fatalf("BuildEngine() error = %v", err)
+	}
+	e.Step("a", struct{}{})
+
+	want := []string{"exit:any:0", "exit:0", "enter:any:1", "enter:1"}
+	if len(got) != len(want) {
+		t.Fatalf("callbacks len = %d, want %d (%v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("callbacks[%d] = %q, want %q", i, got[i], want[i])
 		}
 	}
 }
