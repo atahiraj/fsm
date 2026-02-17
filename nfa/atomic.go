@@ -1,177 +1,175 @@
 package nfa
 
-import (
-	"sync"
-)
+import "sync"
 
 // AtomicNFA is a thread-safe wrapper around NFA.
 // Use NewAtomic to construct a non-nil wrapper.
-type AtomicNFA[State comparable, Symbol comparable] struct {
+type AtomicNFA[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
 	mu sync.RWMutex
-	n  *NFA[State, Symbol]
+	n  *NFA[State, Symbol, StateKey, SymbolKey]
 }
 
 // NewAtomic wraps an NFA with a mutex for concurrent access.
-func NewAtomic[State comparable, Symbol comparable](n *NFA[State, Symbol]) *AtomicNFA[State, Symbol] {
-	return &AtomicNFA[State, Symbol]{n: n}
+func NewAtomic[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable, SymbolKey comparable](n *NFA[State, Symbol, StateKey, SymbolKey]) *AtomicNFA[State, Symbol, StateKey, SymbolKey] {
+	return &AtomicNFA[State, Symbol, StateKey, SymbolKey]{n: n}
 }
 
 // Delta applies δ to a state on a single symbol.
-func (a *AtomicNFA[State, Symbol]) Delta(s State, sym Symbol) []State {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) Delta(s State, sym Symbol) []State {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.Delta(s, sym)
 }
 
 // DeltaStar applies δ repeatedly over a word. It implements δ*.
-func (a *AtomicNFA[State, Symbol]) DeltaStar(s State, w []Symbol) []State {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) DeltaStar(s State, w []Symbol) []State {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.DeltaStar(s, w)
 }
 
 // DeltaSet applies δ to a set of states on a symbol.
-func (a *AtomicNFA[State, Symbol]) DeltaSet(states []State, sym Symbol) []State {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) DeltaSet(states []State, sym Symbol) []State {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.DeltaSet(states, sym)
 }
 
 // DeltaStarSet applies δ* to a set of states over a word.
-func (a *AtomicNFA[State, Symbol]) DeltaStarSet(states []State, w []Symbol) []State {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) DeltaStarSet(states []State, w []Symbol) []State {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.DeltaStarSet(states, w)
 }
 
 // Epsilon applies δ to a state on ε.
-func (a *AtomicNFA[State, Symbol]) Epsilon(s State) []State {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) Epsilon(s State) []State {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.Epsilon(s)
 }
 
 // EpsilonClosure returns ε-closure(s).
-func (a *AtomicNFA[State, Symbol]) EpsilonClosure(s State) []State {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) EpsilonClosure(s State) []State {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.EpsilonClosure(s)
 }
 
 // EpsilonSet applies δ to a set of states on ε.
-func (a *AtomicNFA[State, Symbol]) EpsilonSet(states []State) []State {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) EpsilonSet(states []State) []State {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.EpsilonSet(states)
 }
 
 // EpsilonClosureSet returns ε-closure(Q).
-func (a *AtomicNFA[State, Symbol]) EpsilonClosureSet(states []State) []State {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) EpsilonClosureSet(states []State) []State {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.EpsilonClosureSet(states)
 }
 
 // Start returns q₀, the start state.
-func (a *AtomicNFA[State, Symbol]) Start() State {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) Start() State {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.Start()
 }
 
 // StartSet returns {q₀}, the singleton set containing the start state.
-func (a *AtomicNFA[State, Symbol]) StartSet() []State {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) StartSet() []State {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.StartSet()
 }
 
 // States returns Q, the set of all states.
-func (a *AtomicNFA[State, Symbol]) States() []State {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) States() []State {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.States()
 }
 
 // Alphabet returns Σ, the input alphabet.
-func (a *AtomicNFA[State, Symbol]) Alphabet() []Symbol {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) Alphabet() []Symbol {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.Alphabet()
 }
 
 // Accepting returns F, the set of accepting states.
-func (a *AtomicNFA[State, Symbol]) Accepting() []State {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) Accepting() []State {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.Accepting()
 }
 
 // Accepts reports whether the NFA accepts the given word.
-func (a *AtomicNFA[State, Symbol]) Accepts(w []Symbol) bool {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) Accepts(w []Symbol) bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.Accepts(w)
 }
 
 // HasState reports whether state ∈ Q.
-func (a *AtomicNFA[State, Symbol]) HasState(s State) bool {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) HasState(s State) bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.HasState(s)
 }
 
 // HasSymbol reports whether symbol ∈ Σ.
-func (a *AtomicNFA[State, Symbol]) HasSymbol(sym Symbol) bool {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) HasSymbol(sym Symbol) bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.HasSymbol(sym)
 }
 
 // IsAccepting reports whether any state in s is an accepting state.
-func (a *AtomicNFA[State, Symbol]) IsAccepting(states []State) bool {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) IsAccepting(states []State) bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.n.IsAccepting(states)
 }
 
 // SetStart sets q₀, the start state.
-func (a *AtomicNFA[State, Symbol]) SetStart(s State) {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) SetStart(s State) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.n.SetStart(s)
 }
 
 // AddStates inserts states into Q.
-func (a *AtomicNFA[State, Symbol]) AddStates(states ...State) {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) AddStates(states ...State) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.n.AddStates(states...)
 }
 
 // AddAlphabet inserts symbols into Σ.
-func (a *AtomicNFA[State, Symbol]) AddAlphabet(symbols ...Symbol) {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) AddAlphabet(symbols ...Symbol) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.n.AddAlphabet(symbols...)
 }
 
 // AddAccepting inserts states into F.
-func (a *AtomicNFA[State, Symbol]) AddAccepting(states ...State) {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) AddAccepting(states ...State) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.n.AddAccepting(states...)
 }
 
 // RemoveAccepting removes states from F.
-func (a *AtomicNFA[State, Symbol]) RemoveAccepting(states ...State) {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) RemoveAccepting(states ...State) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.n.RemoveAccepting(states...)
 }
 
 // SetDeltaer sets δ and ε.
-func (a *AtomicNFA[State, Symbol]) SetDeltaer(deltaer Deltaer[State, Symbol]) {
+func (a *AtomicNFA[State, Symbol, StateKey, SymbolKey]) SetDeltaer(deltaer Deltaer[StateKey, SymbolKey]) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.n.SetDeltaer(deltaer)

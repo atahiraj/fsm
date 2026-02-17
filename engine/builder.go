@@ -1,8 +1,6 @@
 package engine
 
-import (
-	"errors"
-)
+import "errors"
 
 // Builder wires an FSM and Observer into an Engine.
 type Builder[S any, E any, SP any, EP any] struct {
@@ -43,29 +41,29 @@ func (b *Builder[S, E, SP, EP]) BuildAtomic() (*AtomicEngine[S, E, SP, EP], erro
 }
 
 // DFA constructs a Builder backed by a DFA-like machine.
-func DFA[State comparable, Symbol comparable, SP any, EP any](d dfaLike[State, Symbol]) *Builder[State, Symbol, SP, EP] {
+func DFA[State any, Symbol any, SP any, EP any](d dfaLike[State, Symbol]) *Builder[State, Symbol, SP, EP] {
 	return NewBuilder[State, Symbol, SP, EP](dfaFSM[State, Symbol]{d: d})
 }
 
 // NFA constructs a Builder backed by an NFA-like machine.
-func NFA[State comparable, Symbol comparable, Config any, SP any, EP any](n nfaLike[State, Symbol, Config]) *Builder[Config, Symbol, SP, EP] {
+func NFA[State any, Symbol any, Config any, SP any, EP any](n nfaLike[State, Symbol, Config]) *Builder[Config, Symbol, SP, EP] {
 	return NewBuilder[Config, Symbol, SP, EP](nfaFSM[State, Symbol, Config]{n: n})
 }
 
-type dfaLike[State comparable, Symbol comparable] interface {
+type dfaLike[State any, Symbol any] interface {
 	Start() State
 	Delta(state State, symbol Symbol) (State, bool)
 	IsAccepting(state State) bool
 }
 
-type nfaLike[State comparable, Symbol comparable, Config any] interface {
+type nfaLike[State any, Symbol any, Config any] interface {
 	StartSet() Config
 	EpsilonClosureSet(states Config) Config
 	DeltaSet(states Config, a Symbol) Config
 	IsAccepting(states Config) bool
 }
 
-type dfaFSM[State comparable, Symbol comparable] struct {
+type dfaFSM[State any, Symbol any] struct {
 	d dfaLike[State, Symbol]
 }
 
@@ -85,7 +83,7 @@ func (f dfaFSM[State, Symbol]) IsAccepting(s State) bool {
 	return f.d.IsAccepting(s)
 }
 
-type nfaFSM[State comparable, Symbol comparable, Config any] struct {
+type nfaFSM[State any, Symbol any, Config any] struct {
 	n nfaLike[State, Symbol, Config]
 }
 

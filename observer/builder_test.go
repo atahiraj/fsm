@@ -12,7 +12,7 @@ func (e *execRecorder) Execute(f func(from int, sp struct{}, to int, e2 string, 
 func TestBuildObserver(t *testing.T) {
 	exec := &execRecorder{}
 
-	b := New[int, string, struct{}, struct{}]()
+	b := New[int, string, struct{}, struct{}, int]().WithEqualState(func(a, b int) bool { return a == b })
 	b.WithExecutor(exec)
 	var seen []string
 	b.OnStepAny(func(from int, _ struct{}, to int, _ string, _ struct{}) { seen = append(seen, "step:any") })

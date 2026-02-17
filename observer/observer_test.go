@@ -33,19 +33,20 @@ func TestObserverDispatchOrder(t *testing.T) {
 	onStepAny := []func(from int, sp struct{}, to int, e string, ep struct{}){
 		func(from int, _ struct{}, to int, _ string, _ struct{}) { rec.add("step:any", from, to) },
 	}
-	onStep := map[transition[int]][]func(from int, sp struct{}, to int, e string, ep struct{}){
-		transition[int]{from: 1, to: 2}: {func(from int, _ struct{}, to int, _ string, _ struct{}) { rec.add("step:1->2", from, to) }},
+	onStep := []transitionCallback[int, string, struct{}, struct{}]{
+		{from: 1, to: 2, f: func(from int, _ struct{}, to int, _ string, _ struct{}) { rec.add("step:1->2", from, to) }},
 	}
 
-	onExit := map[int][]func(from int, sp struct{}, e string, ep struct{}){
-		1: {func(from int, _ struct{}, _ string, _ struct{}) { rec.add("exit:1", from, 0) }},
+	onExit := []stateCallback[int, string, struct{}, struct{}]{
+		{state: 1, f: func(from int, _ struct{}, _ string, _ struct{}) { rec.add("exit:1", from, 0) }},
 	}
-	onEnter := map[int][]func(to int, sp struct{}, e string, ep struct{}){
-		2: {func(to int, _ struct{}, _ string, _ struct{}) { rec.add("enter:2", 0, to) }},
+	onEnter := []stateCallback[int, string, struct{}, struct{}]{
+		{state: 2, f: func(to int, _ struct{}, _ string, _ struct{}) { rec.add("enter:2", 0, to) }},
 	}
 
-	o := NewObserver[int, string, struct{}, struct{}](Config[int, string, struct{}, struct{}]{
+	o := NewObserver[int, string, struct{}, struct{}, int](Config[int, string, struct{}, struct{}, int]{
 		Executor:   exec,
+		EqualState: func(a, b int) bool { return a == b },
 		OnStepAny:  onStepAny,
 		OnStep:     onStep,
 		OnExitAny:  onExitAny,

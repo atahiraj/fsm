@@ -9,6 +9,12 @@ import (
 
 type nstate int
 
+func (s nstate) Key() int { return int(s) }
+
+type nsymbol byte
+
+func (s nsymbol) Key() byte { return byte(s) }
+
 const (
 	s0 nstate = iota
 	s1
@@ -16,25 +22,43 @@ const (
 )
 
 type deltaTable struct {
-	bySym map[nstate]map[byte][]nstate
+	bySym map[nstate]map[nsymbol][]nstate
 	eps   map[nstate][]nstate
 }
 
-func (t deltaTable) Delta(state nstate, symbol byte) []nstate {
-	row := t.bySym[state]
+func (t deltaTable) Delta(state int, symbol byte) []int {
+	row := t.bySym[nstate(state)]
 	if row == nil {
 		return nil
 	}
-	return row[symbol]
+	next := row[nsymbol(symbol)]
+	out := make([]int, 0, len(next))
+	for _, s := range next {
+		out = append(out, s.Key())
+	}
+	return out
 }
 
-func (t deltaTable) Epsilon(state nstate) []nstate {
-	return t.eps[state]
+func (t deltaTable) Epsilon(state int) []int {
+	next := t.eps[nstate(state)]
+	out := make([]int, 0, len(next))
+	for _, s := range next {
+		out = append(out, s.Key())
+	}
+	return out
 }
 
-func simpleNFA() *nfa.NFA[nstate, byte] {
+func nword(xs ...byte) []nsymbol {
+	out := make([]nsymbol, 0, len(xs))
+	for _, x := range xs {
+		out = append(out, nsymbol(x))
+	}
+	return out
+}
+
+func simpleNFA() *nfa.NFA[nstate, nsymbol, int, byte] {
 	table := deltaTable{
-		bySym: map[nstate]map[byte][]nstate{
+		bySym: map[nstate]map[nsymbol][]nstate{
 			s1: {
 				'a': {s1, s2},
 			},
@@ -43,9 +67,9 @@ func simpleNFA() *nfa.NFA[nstate, byte] {
 			s0: {s1},
 		},
 	}
-	return nfa.New(nfa.Config[nstate, byte]{
+	return nfa.New(nfa.Config[nstate, nsymbol, int, byte]{
 		States:    []nstate{s0, s1, s2},
-		Alphabet:  []byte{'a'},
+		Alphabet:  []nsymbol{'a'},
 		Start:     s0,
 		Accepting: []nstate{s2},
 		Deltaer:   table,
@@ -54,7 +78,7 @@ func simpleNFA() *nfa.NFA[nstate, byte] {
 
 func TestAtomicNFAAccepts(t *testing.T) {
 	a := nfa.NewAtomic(simpleNFA())
-	if !a.Accepts([]byte{'a'}) {
+	if !a.Accepts(nword('a')) {
 		t.Fatalf("expected acceptance via epsilon transition")
 	}
 	if a.Accepts(nil) {
@@ -70,7 +94,7 @@ func TestAtomicNFAConcurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
-				_ = a.Accepts([]byte{'a'})
+				_ = a.Accepts(nword('a'))
 				a.AddAccepting(s1)
 				a.RemoveAccepting(s1)
 			}
