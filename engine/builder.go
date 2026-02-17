@@ -3,25 +3,25 @@ package engine
 import "errors"
 
 // Builder wires an FSM and Observer into an Engine.
-type Builder[S any, E any, SP any, EP any] struct {
-	fsm FSM[S, E]
-	obs Observer[S, E, SP, EP]
+type Builder[S any, I any, SP any, IP any] struct {
+	fsm FSM[S, I]
+	obs Observer[S, I, SP, IP]
 }
 
 // NewBuilder constructs a Builder for the given FSM.
-func NewBuilder[S any, E any, SP any, EP any](fsm FSM[S, E]) *Builder[S, E, SP, EP] {
-	return &Builder[S, E, SP, EP]{fsm: fsm}
+func NewBuilder[S any, I any, SP any, IP any](fsm FSM[S, I]) *Builder[S, I, SP, IP] {
+	return &Builder[S, I, SP, IP]{fsm: fsm}
 }
 
 // WithObserver sets the observer.
-func (b *Builder[S, E, SP, EP]) WithObserver(obs Observer[S, E, SP, EP]) *Builder[S, E, SP, EP] {
+func (b *Builder[S, I, SP, IP]) WithObserver(obs Observer[S, I, SP, IP]) *Builder[S, I, SP, IP] {
 	b.obs = obs
 	return b
 }
 
 // Build constructs the Engine.
 // Returns an error if fsm or observer is missing.
-func (b *Builder[S, E, SP, EP]) Build() (*Engine[S, E, SP, EP], error) {
+func (b *Builder[S, I, SP, IP]) Build() (*Engine[S, I, SP, IP], error) {
 	if b.fsm == nil {
 		return nil, errors.New("engine builder: fsm is nil")
 	}
@@ -32,7 +32,7 @@ func (b *Builder[S, E, SP, EP]) Build() (*Engine[S, E, SP, EP], error) {
 }
 
 // BuildAtomic constructs a thread-safe Engine.
-func (b *Builder[S, E, SP, EP]) BuildAtomic() (*AtomicEngine[S, E, SP, EP], error) {
+func (b *Builder[S, I, SP, IP]) BuildAtomic() (*AtomicEngine[S, I, SP, IP], error) {
 	e, err := b.Build()
 	if err != nil {
 		return nil, err
@@ -41,13 +41,13 @@ func (b *Builder[S, E, SP, EP]) BuildAtomic() (*AtomicEngine[S, E, SP, EP], erro
 }
 
 // DFA constructs a Builder backed by a DFA-like machine.
-func DFA[State any, Symbol any, SP any, EP any](d dfaLike[State, Symbol]) *Builder[State, Symbol, SP, EP] {
-	return NewBuilder[State, Symbol, SP, EP](dfaFSM[State, Symbol]{d: d})
+func DFA[State any, Symbol any, SP any, IP any](d dfaLike[State, Symbol]) *Builder[State, Symbol, SP, IP] {
+	return NewBuilder[State, Symbol, SP, IP](dfaFSM[State, Symbol]{d: d})
 }
 
 // NFA constructs a Builder backed by an NFA-like machine.
-func NFA[State any, Symbol any, Config any, SP any, EP any](n nfaLike[State, Symbol, Config]) *Builder[Config, Symbol, SP, EP] {
-	return NewBuilder[Config, Symbol, SP, EP](nfaFSM[State, Symbol, Config]{n: n})
+func NFA[State any, Symbol any, Config any, SP any, IP any](n nfaLike[State, Symbol, Config]) *Builder[Config, Symbol, SP, IP] {
+	return NewBuilder[Config, Symbol, SP, IP](nfaFSM[State, Symbol, Config]{n: n})
 }
 
 type dfaLike[State any, Symbol any] interface {

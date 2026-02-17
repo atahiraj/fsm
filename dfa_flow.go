@@ -15,20 +15,20 @@ type DFAGraph[State any, Symbol any] interface {
 }
 
 // Executor controls how callbacks are executed.
-type Executor[S any, E, SP, EP any] interface {
-	Execute(f func(from S, sp SP, to S, e E, ep EP), from S, sp SP, to S, e E, ep EP)
+type Executor[S any, I, SP, IP any] interface {
+	Execute(f func(from S, sp SP, to S, e I, ep IP), from S, sp SP, to S, e I, ep IP)
 }
 
 // DefaultExecutor calls the callback directly.
-type DefaultExecutor[S any, E, SP, EP any] struct{}
+type DefaultExecutor[S any, I, SP, IP any] struct{}
 
-func (DefaultExecutor[S, E, SP, EP]) Execute(
-	f func(from S, sp SP, to S, e E, ep EP),
+func (DefaultExecutor[S, I, SP, IP]) Execute(
+	f func(from S, sp SP, to S, e I, ep IP),
 	from S,
 	sp SP,
 	to S,
-	e E,
-	ep EP,
+	e I,
+	ep IP,
 ) {
 	f(from, sp, to, e, ep)
 }
@@ -40,11 +40,11 @@ func DFA[
 	StateKey comparable,
 	SymbolKey comparable,
 	SP any,
-	EP any,
-]() *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	return &DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]{
+	IP any,
+]() *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
+	return &DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]{
 		dfa:  dfa.NewBuilder[State, Symbol](),
-		exec: DefaultExecutor[State, Symbol, SP, EP]{},
+		exec: DefaultExecutor[State, Symbol, SP, IP]{},
 	}
 }
 
@@ -55,9 +55,9 @@ func NewDFABuilder[
 	StateKey comparable,
 	SymbolKey comparable,
 	SP any,
-	EP any,
-]() *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	return &DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]{
+	IP any,
+]() *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
+	return &DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]{
 		dfa: dfa.NewBuilder[State, Symbol](),
 	}
 }
@@ -69,65 +69,65 @@ type DFABuilder[
 	StateKey comparable,
 	SymbolKey comparable,
 	SP any,
-	EP any,
+	IP any,
 ] struct {
 	dfa *dfa.Builder[State, Symbol, StateKey, SymbolKey]
 
-	exec Executor[State, Symbol, SP, EP]
+	exec Executor[State, Symbol, SP, IP]
 
 	// Dispatch order is fixed by phase:
 	// step-any -> step -> exit-any -> exit -> enter-any -> enter
-	stepAnyCallbacks  []func(from State, sp SP, to State, e Symbol, ep EP)
-	stepCallbacks     []func(from State, sp SP, to State, e Symbol, ep EP)
-	exitAnyCallbacks  []func(from State, sp SP, to State, e Symbol, ep EP)
-	exitCallbacks     []func(from State, sp SP, to State, e Symbol, ep EP)
-	enterAnyCallbacks []func(from State, sp SP, to State, e Symbol, ep EP)
-	enterCallbacks    []func(from State, sp SP, to State, e Symbol, ep EP)
+	stepAnyCallbacks  []func(from State, sp SP, to State, e Symbol, ep IP)
+	stepCallbacks     []func(from State, sp SP, to State, e Symbol, ep IP)
+	exitAnyCallbacks  []func(from State, sp SP, to State, e Symbol, ep IP)
+	exitCallbacks     []func(from State, sp SP, to State, e Symbol, ep IP)
+	enterAnyCallbacks []func(from State, sp SP, to State, e Symbol, ep IP)
+	enterCallbacks    []func(from State, sp SP, to State, e Symbol, ep IP)
 
 	dfaOverride *dfa.DFA[State, Symbol, StateKey, SymbolKey]
-	obsOverride engine.Observer[State, Symbol, SP, EP]
+	obsOverride engine.Observer[State, Symbol, SP, IP]
 	err         error
 }
 
 // WithDFA overrides the DFA built by this builder.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithDFA(d *dfa.DFA[State, Symbol, StateKey, SymbolKey]) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithDFA(d *dfa.DFA[State, Symbol, StateKey, SymbolKey]) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	b.dfaOverride = d
 	return b
 }
 
 // WithGraph replaces the graph used by the DFA builder.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithGraph(g DFAGraph[State, Symbol]) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithGraph(g DFAGraph[State, Symbol]) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	b.dfa.WithGraph(g)
 	return b
 }
 
 // WithStart sets q₀.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithStart(state State) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithStart(state State) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	b.dfa.SetStart(state)
 	return b
 }
 
 // WithStates adds states to Q.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithStates(states ...State) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithStates(states ...State) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	b.dfa.AddStates(states...)
 	return b
 }
 
 // WithAlphabet adds symbols to Σ.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithAlphabet(symbols ...Symbol) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithAlphabet(symbols ...Symbol) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	b.dfa.AddAlphabet(symbols...)
 	return b
 }
 
 // WithAccepting adds states to F.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithAccepting(states ...State) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithAccepting(states ...State) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	b.dfa.AddAccepting(states...)
 	return b
 }
 
 // WithTransition inserts (from, a, to) into δ.
 // Preconditions: transition does not introduce nondeterminism.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithTransition(from State, symbol Symbol, to State) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithTransition(from State, symbol Symbol, to State) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	if b.err != nil {
 		return b
 	}
@@ -138,20 +138,20 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithTransition(
 }
 
 // WithObserver overrides the observer used by the Engine build.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithObserver(obs engine.Observer[State, Symbol, SP, EP]) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithObserver(obs engine.Observer[State, Symbol, SP, IP]) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	b.obsOverride = obs
 	return b
 }
 
 // WithExecutor sets the observer executor.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithExecutor(exec Executor[State, Symbol, SP, EP]) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithExecutor(exec Executor[State, Symbol, SP, IP]) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	b.exec = exec
 	return b
 }
 
 // WithOnStepAny registers a callback for every step.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnStepAny(f func(from State, sp SP, to State, e Symbol, ep EP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep EP) {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithOnStepAny(f func(from State, sp SP, to State, e Symbol, ep IP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
+	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep IP) {
 		f(from, sp, to, e, ep)
 	}
 	b.stepAnyCallbacks = append(b.stepAnyCallbacks, decoratedFunc)
@@ -159,10 +159,10 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnStepAny(f
 }
 
 // WithOnStep registers a callback for a specific transition from -> to.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnStep(from State, to State, f func(from State, sp SP, to State, e Symbol, ep EP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithOnStep(from State, to State, f func(from State, sp SP, to State, e Symbol, ep IP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	fromKey := from.Key()
 	toKey := to.Key()
-	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep EP) {
+	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep IP) {
 		if from.Key() == fromKey && to.Key() == toKey {
 			f(from, sp, to, e, ep)
 		}
@@ -172,9 +172,9 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnStep(from
 }
 
 // WithOnExit registers a callback when leaving state s.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnExit(s State, f func(from State, sp SP, e Symbol, ep EP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithOnExit(s State, f func(from State, sp SP, e Symbol, ep IP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	target := s.Key()
-	decoratedFunc := func(from State, sp SP, _ State, e Symbol, ep EP) {
+	decoratedFunc := func(from State, sp SP, _ State, e Symbol, ep IP) {
 		if from.Key() == target {
 			f(from, sp, e, ep)
 		}
@@ -184,9 +184,9 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnExit(s St
 }
 
 // WithOnEnter registers a callback when entering state s.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnEnter(s State, f func(to State, sp SP, e Symbol, ep EP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithOnEnter(s State, f func(to State, sp SP, e Symbol, ep IP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	target := s.Key()
-	decoratedFunc := func(_ State, sp SP, to State, e Symbol, ep EP) {
+	decoratedFunc := func(_ State, sp SP, to State, e Symbol, ep IP) {
 		if to.Key() == target {
 			f(to, sp, e, ep)
 		}
@@ -196,8 +196,8 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnEnter(s S
 }
 
 // WithOnExitAny registers a callback when leaving any state.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnExitAny(f func(from State, sp SP, e Symbol, ep EP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	decoratedFunc := func(from State, sp SP, _ State, e Symbol, ep EP) {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithOnExitAny(f func(from State, sp SP, e Symbol, ep IP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
+	decoratedFunc := func(from State, sp SP, _ State, e Symbol, ep IP) {
 		f(from, sp, e, ep)
 	}
 	b.exitAnyCallbacks = append(b.exitAnyCallbacks, decoratedFunc)
@@ -205,8 +205,8 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnExitAny(f
 }
 
 // WithOnEnterAny registers a callback when entering any state.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnEnterAny(f func(to State, sp SP, e Symbol, ep EP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	decoratedFunc := func(_ State, sp SP, to State, e Symbol, ep EP) {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithOnEnterAny(f func(to State, sp SP, e Symbol, ep IP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
+	decoratedFunc := func(_ State, sp SP, to State, e Symbol, ep IP) {
 		f(to, sp, e, ep)
 	}
 	b.enterAnyCallbacks = append(b.enterAnyCallbacks, decoratedFunc)
@@ -214,7 +214,7 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnEnterAny(
 }
 
 // BuildDFA returns the DFA built from the configured pieces.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) BuildDFA() (*dfa.DFA[State, Symbol, StateKey, SymbolKey], error) {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) BuildDFA() (*dfa.DFA[State, Symbol, StateKey, SymbolKey], error) {
 	if b.err != nil {
 		return nil, b.err
 	}
@@ -225,7 +225,7 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) BuildDFA() (*df
 }
 
 // BuildAtomicDFA returns a thread-safe DFA.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) BuildAtomicDFA() (*dfa.AtomicDFA[State, Symbol, StateKey, SymbolKey], error) {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) BuildAtomicDFA() (*dfa.AtomicDFA[State, Symbol, StateKey, SymbolKey], error) {
 	d, err := b.BuildDFA()
 	if err != nil {
 		return nil, err
@@ -233,13 +233,13 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) BuildAtomicDFA(
 	return dfa.NewAtomic(d), nil
 }
 
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) buildObserver() (engine.Observer[State, Symbol, SP, EP], error) {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) buildObserver() (engine.Observer[State, Symbol, SP, IP], error) {
 	if b.exec == nil {
 		return nil, errors.New("observer builder: executor is nil")
 	}
 
 	total := len(b.stepAnyCallbacks) + len(b.stepCallbacks) + len(b.exitAnyCallbacks) + len(b.exitCallbacks) + len(b.enterAnyCallbacks) + len(b.enterCallbacks)
-	callbacks := make([]func(from State, sp SP, to State, e Symbol, ep EP), 0, total)
+	callbacks := make([]func(from State, sp SP, to State, e Symbol, ep IP), 0, total)
 	for _, callback := range b.stepAnyCallbacks {
 		callbacks = append(callbacks, callback)
 	}
@@ -259,11 +259,11 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) buildObserver()
 		callbacks = append(callbacks, callback)
 	}
 
-	return observer.NewObserver[State, Symbol, SP, EP, State](b.exec, callbacks...), nil
+	return observer.NewObserver[State, Symbol, SP, IP, State](b.exec, callbacks...), nil
 }
 
 // BuildEngine wires the DFA and observer into an Engine.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) BuildEngine() (*engine.Engine[State, Symbol, SP, EP], error) {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) BuildEngine() (*engine.Engine[State, Symbol, SP, IP], error) {
 	obs := b.obsOverride
 	if obs == nil {
 		var err error
@@ -276,11 +276,11 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) BuildEngine() (
 	if err != nil {
 		return nil, err
 	}
-	return engine.DFA[State, Symbol, SP, EP](d).WithObserver(obs).Build()
+	return engine.DFA[State, Symbol, SP, IP](d).WithObserver(obs).Build()
 }
 
 // BuildAtomicEngine wires the DFA and observer into a thread-safe Engine.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) BuildAtomicEngine() (*engine.AtomicEngine[State, Symbol, SP, EP], error) {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) BuildAtomicEngine() (*engine.AtomicEngine[State, Symbol, SP, IP], error) {
 	obs := b.obsOverride
 	if obs == nil {
 		var err error
@@ -293,11 +293,11 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) BuildAtomicEngi
 	if err != nil {
 		return nil, err
 	}
-	return engine.DFA[State, Symbol, SP, EP](d).WithObserver(obs).BuildAtomic()
+	return engine.DFA[State, Symbol, SP, IP](d).WithObserver(obs).BuildAtomic()
 }
 
 // BuildRunner wires the DFA and observer into an Engine-backed Runner.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) BuildRunner(buffer int) (*runner.Runner[Symbol, EP], error) {
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) BuildRunner(buffer int) (*runner.Runner[Symbol, IP], error) {
 	e, err := b.BuildEngine()
 	if err != nil {
 		return nil, err
