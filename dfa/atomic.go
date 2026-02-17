@@ -1,16 +1,20 @@
 package dfa
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/stnhrsprkwns/fsm/key"
+)
 
 // AtomicDFA is a thread-safe wrapper around DFA.
 // Use NewAtomic to construct a non-nil wrapper.
-type AtomicDFA[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
+type AtomicDFA[State key.Keyer[StateKey], Symbol key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
 	mu sync.RWMutex
 	d  *DFA[State, Symbol, StateKey, SymbolKey]
 }
 
 // NewAtomic wraps a DFA with a mutex for concurrent access.
-func NewAtomic[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable, SymbolKey comparable](d *DFA[State, Symbol, StateKey, SymbolKey]) *AtomicDFA[State, Symbol, StateKey, SymbolKey] {
+func NewAtomic[State key.Keyer[StateKey], Symbol key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable](d *DFA[State, Symbol, StateKey, SymbolKey]) *AtomicDFA[State, Symbol, StateKey, SymbolKey] {
 	return &AtomicDFA[State, Symbol, StateKey, SymbolKey]{d: d}
 }
 

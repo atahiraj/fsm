@@ -1,11 +1,9 @@
 package nfa
 
-import "github.com/stnhrsprkwns/fsm/internal/set"
-
-// Keyed exposes a stable comparable key for a value.
-type Keyed[K comparable] interface {
-	Key() K
-}
+import (
+	"github.com/stnhrsprkwns/fsm/internal/set"
+	"github.com/stnhrsprkwns/fsm/key"
+)
 
 // Deltaer abstracts the NFA transition relation δ.
 //
@@ -19,7 +17,7 @@ type Deltaer[StateKey comparable, SymbolKey comparable] interface {
 }
 
 // NFA models a nondeterministic finite automaton.
-type NFA[S Keyed[StateKey], A Keyed[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
+type NFA[S key.Keyer[StateKey], A key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
 	deltaer    Deltaer[StateKey, SymbolKey] // δ, transition relation
 	states     set.Set[StateKey]            // Q, all state keys.
 	alphabet   set.Set[SymbolKey]           // Σ, all symbol keys.
@@ -30,7 +28,7 @@ type NFA[S Keyed[StateKey], A Keyed[SymbolKey], StateKey comparable, SymbolKey c
 }
 
 // Config holds the data needed to construct an NFA (Q, Σ, δ, q₀, F).
-type Config[S Keyed[StateKey], A Keyed[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
+type Config[S key.Keyer[StateKey], A key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
 	// States is Q, the set of all states.
 	States []S
 	// Alphabet is Σ, the input alphabet.
@@ -44,7 +42,7 @@ type Config[S Keyed[StateKey], A Keyed[SymbolKey], StateKey comparable, SymbolKe
 }
 
 // New constructs an NFA from (Q, Σ, δ, q₀, F).
-func New[S Keyed[StateKey], A Keyed[SymbolKey], StateKey comparable, SymbolKey comparable](cfg Config[S, A, StateKey, SymbolKey]) *NFA[S, A, StateKey, SymbolKey] {
+func New[S key.Keyer[StateKey], A key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable](cfg Config[S, A, StateKey, SymbolKey]) *NFA[S, A, StateKey, SymbolKey] {
 	n := &NFA[S, A, StateKey, SymbolKey]{
 		deltaer:    cfg.Deltaer,
 		start:      cfg.Start,
@@ -58,7 +56,7 @@ func New[S Keyed[StateKey], A Keyed[SymbolKey], StateKey comparable, SymbolKey c
 }
 
 // NewNFA constructs an NFA from (Q, Σ, δ, q₀, F).
-func NewNFA[S Keyed[StateKey], A Keyed[SymbolKey], StateKey comparable, SymbolKey comparable](states []S, alphabet []A, start S, accepting []S, deltaer Deltaer[StateKey, SymbolKey]) *NFA[S, A, StateKey, SymbolKey] {
+func NewNFA[S key.Keyer[StateKey], A key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable](states []S, alphabet []A, start S, accepting []S, deltaer Deltaer[StateKey, SymbolKey]) *NFA[S, A, StateKey, SymbolKey] {
 	return New(Config[S, A, StateKey, SymbolKey]{
 		States:    states,
 		Alphabet:  alphabet,

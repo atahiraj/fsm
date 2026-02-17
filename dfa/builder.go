@@ -6,6 +6,7 @@ import (
 
 	"github.com/stnhrsprkwns/fsm/graph"
 	"github.com/stnhrsprkwns/fsm/internal/set"
+	"github.com/stnhrsprkwns/fsm/key"
 )
 
 type graphLike[State any, Symbol any] interface {
@@ -28,7 +29,7 @@ func (d graphDeltaer[StateKey, SymbolKey]) Delta(state StateKey, symbol SymbolKe
 	return next[0], true
 }
 
-type valueGraphDeltaer[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
+type valueGraphDeltaer[State key.Keyer[StateKey], Symbol key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
 	g          graphLike[State, Symbol]
 	stateByKey map[StateKey]State
 	symByKey   map[SymbolKey]Symbol
@@ -53,7 +54,7 @@ func (d valueGraphDeltaer[State, Symbol, StateKey, SymbolKey]) Delta(state State
 }
 
 // Builder constructs a DFA from (Q, Σ, δ, q₀, F) using a graph backend.
-type Builder[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
+type Builder[State key.Keyer[StateKey], Symbol key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
 	g         *graph.Graph[StateKey, SymbolKey] // internal graph built by builder
 	gLike     graphLike[State, Symbol]          // provided graphLike by user
 	states    set.Set[StateKey]                 // Q
@@ -66,7 +67,7 @@ type Builder[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable
 }
 
 // NewBuilder creates an empty DFA builder.
-func NewBuilder[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable, SymbolKey comparable]() *Builder[State, Symbol, StateKey, SymbolKey] {
+func NewBuilder[State key.Keyer[StateKey], Symbol key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable]() *Builder[State, Symbol, StateKey, SymbolKey] {
 	return &Builder[State, Symbol, StateKey, SymbolKey]{
 		g:          graph.New[StateKey, SymbolKey](),
 		stateByKey: make(map[StateKey]State),

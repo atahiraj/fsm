@@ -5,6 +5,7 @@ import (
 
 	"github.com/stnhrsprkwns/fsm/engine"
 	"github.com/stnhrsprkwns/fsm/internal/set"
+	"github.com/stnhrsprkwns/fsm/key"
 	"github.com/stnhrsprkwns/fsm/nfa"
 	"github.com/stnhrsprkwns/fsm/observer"
 	"github.com/stnhrsprkwns/fsm/runner"
@@ -20,8 +21,8 @@ type nfaObserverCallback[State any, Symbol any, SP any, IP any] func(from []Stat
 
 // NFA constructs a top-level NFA builder.
 func NFA[
-	State nfa.Keyed[StateKey],
-	Symbol nfa.Keyed[SymbolKey],
+	State key.Keyer[StateKey],
+	Symbol key.Keyer[SymbolKey],
 	StateKey comparable,
 	SymbolKey comparable,
 	SP any,
@@ -35,8 +36,8 @@ func NFA[
 
 // NewNFABuilder constructs a low-level NFA builder.
 func NewNFABuilder[
-	State nfa.Keyed[StateKey],
-	Symbol nfa.Keyed[SymbolKey],
+	State key.Keyer[StateKey],
+	Symbol key.Keyer[SymbolKey],
 	StateKey comparable,
 	SymbolKey comparable,
 	SP any,
@@ -49,8 +50,8 @@ func NewNFABuilder[
 
 // NFABuilder wires NFA + Observer + Engine in one fluent flow.
 type NFABuilder[
-	State nfa.Keyed[StateKey],
-	Symbol nfa.Keyed[SymbolKey],
+	State key.Keyer[StateKey],
+	Symbol key.Keyer[SymbolKey],
 	StateKey comparable,
 	SymbolKey comparable,
 	SP any,
@@ -297,7 +298,7 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) BuildRunner(buf
 	return runner.New(e, buffer), nil
 }
 
-func stateSetToKeySet[State nfa.Keyed[StateKey], StateKey comparable](states []State) *set.Set[StateKey] {
+func stateSetToKeySet[State key.Keyer[StateKey], StateKey comparable](states []State) *set.Set[StateKey] {
 	keys := make([]StateKey, 0, len(states))
 	for _, state := range states {
 		keys = append(keys, state.Key())

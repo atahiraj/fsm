@@ -1,11 +1,9 @@
 package dfa
 
-import "github.com/stnhrsprkwns/fsm/internal/set"
-
-// Keyed exposes a stable comparable key for a value.
-type Keyed[K comparable] interface {
-	Key() K
-}
+import (
+	"github.com/stnhrsprkwns/fsm/internal/set"
+	"github.com/stnhrsprkwns/fsm/key"
+)
 
 // Deltaer abstracts the DFA primitive transition function δ.
 //
@@ -26,7 +24,7 @@ func (f DeltaFunc[StateKey, SymbolKey]) Delta(state StateKey, symbol SymbolKey) 
 // DFA models a deterministic finite automaton.
 //
 // The field Deltaer holds the primitive δ over keys.
-type DFA[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
+type DFA[State key.Keyer[StateKey], Symbol key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
 	states     set.Set[StateKey]            // Q, all state keys.
 	alphabet   set.Set[SymbolKey]           // Σ, all symbol keys.
 	deltaer    Deltaer[StateKey, SymbolKey] // δ, primitive transition over keys.
@@ -37,7 +35,7 @@ type DFA[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable, Sy
 }
 
 // Config holds the data needed to construct a DFA (Q, Σ, δ, q₀, F).
-type Config[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
+type Config[State key.Keyer[StateKey], Symbol key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
 	// States is Q, the set of all states.
 	States []State
 	// Alphabet is Σ, the input alphabet.
@@ -51,7 +49,7 @@ type Config[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable,
 }
 
 // New constructs a DFA from (Q, Σ, δ, q₀, F).
-func New[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable, SymbolKey comparable](cfg Config[State, Symbol, StateKey, SymbolKey]) *DFA[State, Symbol, StateKey, SymbolKey] {
+func New[State key.Keyer[StateKey], Symbol key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable](cfg Config[State, Symbol, StateKey, SymbolKey]) *DFA[State, Symbol, StateKey, SymbolKey] {
 	d := &DFA[State, Symbol, StateKey, SymbolKey]{
 		deltaer:    cfg.Deltaer,
 		start:      cfg.Start,

@@ -1,16 +1,20 @@
 package nfa
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/stnhrsprkwns/fsm/key"
+)
 
 // AtomicNFA is a thread-safe wrapper around NFA.
 // Use NewAtomic to construct a non-nil wrapper.
-type AtomicNFA[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
+type AtomicNFA[State key.Keyer[StateKey], Symbol key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
 	mu sync.RWMutex
 	n  *NFA[State, Symbol, StateKey, SymbolKey]
 }
 
 // NewAtomic wraps an NFA with a mutex for concurrent access.
-func NewAtomic[State Keyed[StateKey], Symbol Keyed[SymbolKey], StateKey comparable, SymbolKey comparable](n *NFA[State, Symbol, StateKey, SymbolKey]) *AtomicNFA[State, Symbol, StateKey, SymbolKey] {
+func NewAtomic[State key.Keyer[StateKey], Symbol key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable](n *NFA[State, Symbol, StateKey, SymbolKey]) *AtomicNFA[State, Symbol, StateKey, SymbolKey] {
 	return &AtomicNFA[State, Symbol, StateKey, SymbolKey]{n: n}
 }
 

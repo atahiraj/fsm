@@ -5,6 +5,7 @@ import (
 
 	"github.com/stnhrsprkwns/fsm/dfa"
 	"github.com/stnhrsprkwns/fsm/engine"
+	"github.com/stnhrsprkwns/fsm/key"
 	"github.com/stnhrsprkwns/fsm/observer"
 	"github.com/stnhrsprkwns/fsm/runner"
 )
@@ -35,8 +36,8 @@ func (DefaultExecutor[S, I, SP, IP]) Execute(
 
 // DFA constructs a top-level DFA builder.
 func DFA[
-	State dfa.Keyed[StateKey],
-	Symbol dfa.Keyed[SymbolKey],
+	State key.Keyer[StateKey],
+	Symbol key.Keyer[SymbolKey],
 	StateKey comparable,
 	SymbolKey comparable,
 	SP any,
@@ -50,8 +51,8 @@ func DFA[
 
 // NewDFABuilder constructs a low-level DFA builder.
 func NewDFABuilder[
-	State dfa.Keyed[StateKey],
-	Symbol dfa.Keyed[SymbolKey],
+	State key.Keyer[StateKey],
+	Symbol key.Keyer[SymbolKey],
 	StateKey comparable,
 	SymbolKey comparable,
 	SP any,
@@ -64,8 +65,8 @@ func NewDFABuilder[
 
 // DFABuilder wires DFA + Observer + Engine in one fluent flow.
 type DFABuilder[
-	State dfa.Keyed[StateKey],
-	Symbol dfa.Keyed[SymbolKey],
+	State key.Keyer[StateKey],
+	Symbol key.Keyer[SymbolKey],
 	StateKey comparable,
 	SymbolKey comparable,
 	SP any,
