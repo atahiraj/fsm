@@ -4,6 +4,7 @@ import (
 	"github.com/stnhrsprkwns/fsm/dfa"
 	"github.com/stnhrsprkwns/fsm/engine"
 	"github.com/stnhrsprkwns/fsm/observer"
+	"github.com/stnhrsprkwns/fsm/runner"
 )
 
 // DFAGraph is a minimal graph interface for DFA builders.
@@ -204,4 +205,13 @@ func (b *DFABuilder[State, Symbol, SP, EP]) BuildAtomicEngine() (*engine.AtomicE
 		return nil, err
 	}
 	return engine.DFA[State, Symbol, SP, EP](d).WithObserver(obs).BuildAtomic()
+}
+
+// BuildRunner wires the DFA and observer into an Engine-backed Runner.
+func (b *DFABuilder[State, Symbol, SP, EP]) BuildRunner(buffer int) (*runner.Runner[Symbol, EP], error) {
+	e, err := b.BuildEngine()
+	if err != nil {
+		return nil, err
+	}
+	return runner.New(e, buffer), nil
 }

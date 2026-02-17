@@ -6,6 +6,7 @@ import (
 	"github.com/stnhrsprkwns/fsm/engine"
 	"github.com/stnhrsprkwns/fsm/internal/set"
 	"github.com/stnhrsprkwns/fsm/nfa"
+	"github.com/stnhrsprkwns/fsm/runner"
 )
 
 // NFAGraph is a minimal graph interface for NFA builders.
@@ -195,6 +196,15 @@ func (b *NFABuilder[State, Symbol, SP, EP]) BuildAtomicEngine() (*engine.AtomicE
 		return nil, err
 	}
 	return engine.NFA[State, Symbol, []State, SP, EP](n).WithObserver(obs).BuildAtomic()
+}
+
+// BuildRunner wires the NFA and observer into an Engine-backed Runner.
+func (b *NFABuilder[State, Symbol, SP, EP]) BuildRunner(buffer int) (*runner.Runner[Symbol, EP], error) {
+	e, err := b.BuildEngine()
+	if err != nil {
+		return nil, err
+	}
+	return runner.New(e, buffer), nil
 }
 
 type nfaExitStateCallback[State comparable, Symbol comparable, SP any, EP any] struct {

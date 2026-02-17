@@ -1,9 +1,11 @@
 package fsm
 
 import (
+	"context"
 	"testing"
 
 	nfapkg "github.com/stnhrsprkwns/fsm/nfa"
+	"github.com/stnhrsprkwns/fsm/runner"
 )
 
 type nfaGraph struct {
@@ -200,6 +202,37 @@ func TestNFABuilderBuildAtomicEngine(t *testing.T) {
 	e.Step("a", struct{}{})
 	if calls != 1 {
 		t.Fatalf("onEnterAny calls = %d, want 1", calls)
+	}
+}
+
+func TestNFABuilderBuildRunner(t *testing.T) {
+	b := NFA[int, string, struct{}, struct{}]()
+	b.WithStart(0).
+		WithAccepting(1).
+		WithTransition(0, "a", 1)
+
+	var calls int
+	b.WithOnStepAny(func(from []int, _ struct{}, to []int, _ string, _ struct{}) {
+		calls++
+	})
+
+	r, err := b.BuildRunner(1)
+	if err != nil {
+		t.Fatalf("BuildRunner() error = %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- r.Run(context.Background()) }()
+
+	events := r.Events()
+	events <- runner.Event[string, struct{}]{Event: "a", Payload: struct{}{}}
+	close(events)
+
+	if err := <-done; err != nil {
+		t.Fatalf("Run() error = %v, want nil", err)
+	}
+	if calls != 1 {
+		t.Fatalf("onStepAny calls = %d, want 1", calls)
 	}
 }
 
