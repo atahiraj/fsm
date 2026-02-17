@@ -68,7 +68,7 @@ func TestDefaultExecutor(t *testing.T) {
 }
 
 func TestDFABuilderBuildDFAAccepts(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, int, string, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
 	b.WithStart(0).
 		WithAccepting(2).
 		WithTransition(0, "a", 1).
@@ -94,7 +94,7 @@ func TestDFABuilderWithGraphOverride(t *testing.T) {
 	g := dfaGraph{next: map[dfaState]map[dfaSymbol]dfaState{
 		0: {"a": 1},
 	}}
-	b := DFA[dfaState, dfaSymbol, int, string, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
 	b.WithGraph(g).
 		WithStart(0).
 		WithAccepting(1).
@@ -120,7 +120,7 @@ func TestDFABuilderWithDFAOverride(t *testing.T) {
 		Deltaer:   delta,
 	})
 
-	b := DFA[dfaState, dfaSymbol, int, string, struct{}, struct{}]().WithDFA(override)
+	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]().WithDFA(override)
 	d, err := b.BuildDFA()
 	if err != nil {
 		t.Fatalf("BuildDFA() error = %v", err)
@@ -139,7 +139,7 @@ func TestDFABuilderWithDFAOverride(t *testing.T) {
 }
 
 func TestDFABuilderBuildAtomic(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, int, string, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1)
@@ -154,7 +154,7 @@ func TestDFABuilderBuildAtomic(t *testing.T) {
 }
 
 func TestDFABuilderBuildEngineObserverOrder(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, int, string, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1).
@@ -199,7 +199,7 @@ func TestDFABuilderBuildEngineObserverOrder(t *testing.T) {
 }
 
 func TestDFABuilderWithObserverOverride(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, int, string, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1)
@@ -218,7 +218,7 @@ func TestDFABuilderWithObserverOverride(t *testing.T) {
 }
 
 func TestDFABuilderBuildAtomicEngine(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, int, string, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1)
@@ -239,7 +239,7 @@ func TestDFABuilderBuildAtomicEngine(t *testing.T) {
 }
 
 func TestDFABuilderBuildRunner(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, int, string, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1)
@@ -270,7 +270,7 @@ func TestDFABuilderBuildRunner(t *testing.T) {
 }
 
 func TestDFABuilderBuildEngineErrorMissingExecutor(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, int, string, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1).
@@ -285,7 +285,7 @@ func TestDFABuilderBuildEngineErrorMissingExecutor(t *testing.T) {
 }
 
 func TestDFABuilderTransitionErrorPropagates(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, int, string, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1).
@@ -297,7 +297,7 @@ func TestDFABuilderTransitionErrorPropagates(t *testing.T) {
 }
 
 func TestFacadeDFAFlow(t *testing.T) {
-	b := DFA[dfaState, dfaByteSymbol, int, byte, struct{}, struct{}]()
+	b := DFA[dfaState, dfaByteSymbol, struct{}, struct{}]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, 'a', 1)
