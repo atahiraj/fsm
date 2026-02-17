@@ -30,20 +30,20 @@ type Config[S comparable, E, SP, EP any] struct {
 	Executor   Executor[S, E, SP, EP]
 	OnStepAny  []func(from S, sp SP, to S, e E, ep EP)
 	OnStep     map[transition[S]][]func(from S, sp SP, to S, e E, ep EP)
-	OnExitAny  []func(from S, sp SP, to S, e E, ep EP)
-	OnEnterAny []func(from S, sp SP, to S, e E, ep EP)
-	OnExit     map[S][]func(from S, sp SP, to S, e E, ep EP)
-	OnEnter    map[S][]func(from S, sp SP, to S, e E, ep EP)
+	OnExitAny  []func(from S, sp SP, e E, ep EP)
+	OnEnterAny []func(to S, sp SP, e E, ep EP)
+	OnExit     map[S][]func(from S, sp SP, e E, ep EP)
+	OnEnter    map[S][]func(to S, sp SP, e E, ep EP)
 }
 
 // Observer dispatches per-state enter/exit hooks.
 type Observer[S comparable, E, SP, EP any] struct {
 	onStepAny  []func(from S, sp SP, to S, e E, ep EP)
 	onStep     map[transition[S]][]func(from S, sp SP, to S, e E, ep EP)
-	onExitAny  []func(from S, sp SP, to S, e E, ep EP)
-	onEnterAny []func(from S, sp SP, to S, e E, ep EP)
-	onExit     map[S][]func(from S, sp SP, to S, e E, ep EP)
-	onEnter    map[S][]func(from S, sp SP, to S, e E, ep EP)
+	onExitAny  []func(from S, sp SP, e E, ep EP)
+	onEnterAny []func(to S, sp SP, e E, ep EP)
+	onExit     map[S][]func(from S, sp SP, e E, ep EP)
+	onEnter    map[S][]func(to S, sp SP, e E, ep EP)
 	executor   Executor[S, E, SP, EP]
 }
 
@@ -62,16 +62,30 @@ func NewObserver[S comparable, E, SP, EP any](cfg Config[S, E, SP, EP]) *Observe
 }
 
 // OnExit registers a callback when leaving state s.
-func (o *Observer[S, E, SP, EP]) OnExit(s S, f func(from S, sp SP, to S, e E, ep EP)) {
+func (o *Observer[S, E, SP, EP]) OnExit(s S, f func(from S, sp SP, e E, ep EP)) {
 	o.onExit[s] = append(o.onExit[s], f)
 }
 
 // OnEnter registers a callback when entering state s.
-func (o *Observer[S, E, SP, EP]) OnEnter(s S, f func(from S, sp SP, to S, e E, ep EP)) {
+func (o *Observer[S, E, SP, EP]) OnEnter(s S, f func(to S, sp SP, e E, ep EP)) {
 	o.onEnter[s] = append(o.onEnter[s], f)
 }
 
-// OnStep dispatches exit hooks for from and enter hooks for to.
+func (o *Observer[S, E, SP, EP]) runExit(f func(from S, sp SP, e E, ep EP), from S, sp SP, to S, e E, ep EP) {
+	o.executor.Execute(
+		func(from S, sp SP, _ S, e E, ep EP) { f(from, sp, e, ep) },
+		from, sp, to, e, ep,
+	)
+}
+
+func (o *Observer[S, E, SP, EP]) runEnter(f func(to S, sp SP, e E, ep EP), from S, sp SP, to S, e E, ep EP) {
+	o.executor.Execute(
+		func(_ S, sp SP, to S, e E, ep EP) { f(to, sp, e, ep) },
+		from, sp, to, e, ep,
+	)
+}
+
+// OnStep dispatches step, exit, and enter hooks.
 func (o *Observer[S, E, SP, EP]) OnStep(from S, sp SP, to S, e E, ep EP) {
 	for _, f := range o.onStepAny {
 		o.executor.Execute(f, from, sp, to, e, ep)
@@ -82,19 +96,19 @@ func (o *Observer[S, E, SP, EP]) OnStep(from S, sp SP, to S, e E, ep EP) {
 		}
 	}
 	for _, f := range o.onExitAny {
-		o.executor.Execute(f, from, sp, to, e, ep)
+		o.runExit(f, from, sp, to, e, ep)
 	}
 	if fs := o.onExit[from]; len(fs) != 0 {
 		for _, f := range fs {
-			o.executor.Execute(f, from, sp, to, e, ep)
+			o.runExit(f, from, sp, to, e, ep)
 		}
 	}
 	for _, f := range o.onEnterAny {
-		o.executor.Execute(f, from, sp, to, e, ep)
+		o.runEnter(f, from, sp, to, e, ep)
 	}
 	if fs := o.onEnter[to]; len(fs) != 0 {
 		for _, f := range fs {
-			o.executor.Execute(f, from, sp, to, e, ep)
+			o.runEnter(f, from, sp, to, e, ep)
 		}
 	}
 }

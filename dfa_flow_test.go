@@ -154,16 +154,16 @@ func TestDFABuilderBuildEngineObserverOrder(t *testing.T) {
 	b.WithOnStep(0, 1, func(from int, _ struct{}, to int, _ string, _ struct{}) {
 		order = append(order, "step:0->1")
 	})
-	b.WithOnEnterAny(func(from int, _ struct{}, to int, _ string, _ struct{}) {
+	b.WithOnEnterAny(func(to int, _ struct{}, _ string, _ struct{}) {
 		order = append(order, "enter:any")
 	})
-	b.WithOnExitAny(func(from int, _ struct{}, to int, _ string, _ struct{}) {
+	b.WithOnExitAny(func(from int, _ struct{}, _ string, _ struct{}) {
 		order = append(order, "exit:any")
 	})
-	b.WithOnExit(0, func(from int, _ struct{}, to int, _ string, _ struct{}) {
+	b.WithOnExit(0, func(from int, _ struct{}, _ string, _ struct{}) {
 		order = append(order, "exit:0")
 	})
-	b.WithOnEnter(1, func(from int, _ struct{}, to int, _ string, _ struct{}) {
+	b.WithOnEnter(1, func(to int, _ struct{}, _ string, _ struct{}) {
 		order = append(order, "enter:1")
 	})
 
@@ -210,7 +210,7 @@ func TestDFABuilderBuildAtomicEngine(t *testing.T) {
 		WithTransition(0, "a", 1)
 
 	var calls int
-	b.WithOnEnterAny(func(from int, _ struct{}, to int, _ string, _ struct{}) {
+	b.WithOnEnterAny(func(to int, _ struct{}, _ string, _ struct{}) {
 		calls++
 	})
 

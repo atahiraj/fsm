@@ -140,10 +140,10 @@ func TestNFABuilderBuildEngineObserverOrder(t *testing.T) {
 	b.WithOnStep([]int{0, 1}, []int{1}, func(from []int, _ struct{}, to []int, _ string, _ struct{}) {
 		order = append(order, "step:[0 1]->[1]")
 	})
-	b.WithOnEnterAny(func(from []int, _ struct{}, to []int, _ string, _ struct{}) {
+	b.WithOnEnterAny(func(to []int, _ struct{}, _ string, _ struct{}) {
 		order = append(order, "enter:any")
 	})
-	b.WithOnExitAny(func(from []int, _ struct{}, to []int, _ string, _ struct{}) {
+	b.WithOnExitAny(func(from []int, _ struct{}, _ string, _ struct{}) {
 		order = append(order, "exit:any")
 	})
 
@@ -189,7 +189,7 @@ func TestNFABuilderBuildAtomicEngine(t *testing.T) {
 		WithTransition(0, "a", 1)
 
 	var calls int
-	b.WithOnEnterAny(func(from []int, _ struct{}, to []int, _ string, _ struct{}) {
+	b.WithOnEnterAny(func(to []int, _ struct{}, _ string, _ struct{}) {
 		calls++
 	})
 

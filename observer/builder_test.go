@@ -17,10 +17,10 @@ func TestBuildObserver(t *testing.T) {
 	var seen []string
 	b.OnStepAny(func(from int, _ struct{}, to int, _ string, _ struct{}) { seen = append(seen, "step:any") })
 	b.OnStep(1, 2, func(from int, _ struct{}, to int, _ string, _ struct{}) { seen = append(seen, "step:1->2") })
-	b.OnExitAny(func(from int, _ struct{}, to int, _ string, _ struct{}) { seen = append(seen, "exit:any") })
-	b.OnEnterAny(func(from int, _ struct{}, to int, _ string, _ struct{}) { seen = append(seen, "enter:any") })
-	b.OnExit(1, func(from int, _ struct{}, to int, _ string, _ struct{}) { seen = append(seen, "exit:1") })
-	b.OnEnter(2, func(from int, _ struct{}, to int, _ string, _ struct{}) { seen = append(seen, "enter:2") })
+	b.OnExitAny(func(from int, _ struct{}, _ string, _ struct{}) { seen = append(seen, "exit:any") })
+	b.OnEnterAny(func(to int, _ struct{}, _ string, _ struct{}) { seen = append(seen, "enter:any") })
+	b.OnExit(1, func(from int, _ struct{}, _ string, _ struct{}) { seen = append(seen, "exit:1") })
+	b.OnEnter(2, func(to int, _ struct{}, _ string, _ struct{}) { seen = append(seen, "enter:2") })
 
 	o, err := b.Build()
 	if err != nil {

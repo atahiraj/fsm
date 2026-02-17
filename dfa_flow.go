@@ -129,25 +129,25 @@ func (b *DFABuilder[State, Symbol, SP, EP]) WithOnStep(from State, to State, f f
 }
 
 // WithOnExit registers a callback when leaving state s.
-func (b *DFABuilder[State, Symbol, SP, EP]) WithOnExit(s State, f func(from State, sp SP, to State, e Symbol, ep EP)) *DFABuilder[State, Symbol, SP, EP] {
+func (b *DFABuilder[State, Symbol, SP, EP]) WithOnExit(s State, f func(from State, sp SP, e Symbol, ep EP)) *DFABuilder[State, Symbol, SP, EP] {
 	b.obs.OnExit(s, f)
 	return b
 }
 
 // WithOnEnter registers a callback when entering state s.
-func (b *DFABuilder[State, Symbol, SP, EP]) WithOnEnter(s State, f func(from State, sp SP, to State, e Symbol, ep EP)) *DFABuilder[State, Symbol, SP, EP] {
+func (b *DFABuilder[State, Symbol, SP, EP]) WithOnEnter(s State, f func(to State, sp SP, e Symbol, ep EP)) *DFABuilder[State, Symbol, SP, EP] {
 	b.obs.OnEnter(s, f)
 	return b
 }
 
 // WithOnExitAny registers a callback when leaving any state.
-func (b *DFABuilder[State, Symbol, SP, EP]) WithOnExitAny(f func(from State, sp SP, to State, e Symbol, ep EP)) *DFABuilder[State, Symbol, SP, EP] {
+func (b *DFABuilder[State, Symbol, SP, EP]) WithOnExitAny(f func(from State, sp SP, e Symbol, ep EP)) *DFABuilder[State, Symbol, SP, EP] {
 	b.obs.OnExitAny(f)
 	return b
 }
 
 // WithOnEnterAny registers a callback when entering any state.
-func (b *DFABuilder[State, Symbol, SP, EP]) WithOnEnterAny(f func(from State, sp SP, to State, e Symbol, ep EP)) *DFABuilder[State, Symbol, SP, EP] {
+func (b *DFABuilder[State, Symbol, SP, EP]) WithOnEnterAny(f func(to State, sp SP, e Symbol, ep EP)) *DFABuilder[State, Symbol, SP, EP] {
 	b.obs.OnEnterAny(f)
 	return b
 }
