@@ -165,7 +165,7 @@ func TestDFABuilderBuildEngineObserverOrder(t *testing.T) {
 	b.WithOnStepAny(func(from dfaState, _ struct{}, to dfaState, _ dfaSymbol, _ struct{}) {
 		order = append(order, "step:any")
 	})
-	b.WithOnStep(0, 1, func(from dfaState, _ struct{}, to dfaState, _ dfaSymbol, _ struct{}) {
+	b.WithOnStep(0, 1, func(_ struct{}, _ dfaSymbol, _ struct{}) {
 		order = append(order, "step:0->1")
 	})
 	b.WithOnEnterAny(func(to dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
@@ -174,10 +174,10 @@ func TestDFABuilderBuildEngineObserverOrder(t *testing.T) {
 	b.WithOnExitAny(func(from dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
 		order = append(order, "exit:any")
 	})
-	b.WithOnExit(0, func(from dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnExit(0, func(_ struct{}, _ dfaSymbol, _ struct{}) {
 		order = append(order, "exit:0")
 	})
-	b.WithOnEnter(1, func(to dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnEnter(1, func(_ struct{}, _ dfaSymbol, _ struct{}) {
 		order = append(order, "enter:1")
 	})
 
@@ -212,13 +212,13 @@ func TestDFABuilderEnterExitCallbacksIgnoreSelfTransition(t *testing.T) {
 	b.WithOnEnterAny(func(to dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
 		enterAnyCalls++
 	})
-	b.WithOnEnter(0, func(to dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnEnter(0, func(_ struct{}, _ dfaSymbol, _ struct{}) {
 		enterCalls++
 	})
 	b.WithOnExitAny(func(from dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
 		exitAnyCalls++
 	})
-	b.WithOnExit(0, func(from dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnExit(0, func(_ struct{}, _ dfaSymbol, _ struct{}) {
 		exitCalls++
 	})
 

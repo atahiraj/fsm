@@ -152,20 +152,17 @@ func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithExecutor(ex
 
 // WithOnStepAny registers a callback for every step.
 func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnStepAny(f func(from State, sp SP, to State, e Symbol, ep IP)) *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey] {
-	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep IP) {
-		f(from, sp, to, e, ep)
-	}
-	b.stepAnyCallbacks = append(b.stepAnyCallbacks, decoratedFunc)
+	b.stepAnyCallbacks = append(b.stepAnyCallbacks, f)
 	return b
 }
 
 // WithOnStep registers a callback for a specific transition from -> to.
-func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnStep(from State, to State, f func(from State, sp SP, to State, e Symbol, ep IP)) *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey] {
+func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnStep(from State, to State, f func(sp SP, e Symbol, ep IP)) *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey] {
 	fromKey := from.Key()
 	toKey := to.Key()
 	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep IP) {
 		if from.Key() == fromKey && to.Key() == toKey {
-			f(from, sp, to, e, ep)
+			f(sp, e, ep)
 		}
 	}
 	b.stepCallbacks = append(b.stepCallbacks, decoratedFunc)
@@ -173,13 +170,13 @@ func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnStep(from
 }
 
 // WithOnExit registers a callback when leaving state s.
-func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnExit(s State, f func(from State, sp SP, e Symbol, ep IP)) *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey] {
+func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnExit(s State, f func(sp SP, e Symbol, ep IP)) *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey] {
 	target := s.Key()
 	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep IP) {
 		fromKey := from.Key()
 		toKey := to.Key()
 		if fromKey == target && fromKey != toKey {
-			f(from, sp, e, ep)
+			f(sp, e, ep)
 		}
 	}
 	b.exitCallbacks = append(b.exitCallbacks, decoratedFunc)
@@ -187,13 +184,13 @@ func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnExit(s St
 }
 
 // WithOnEnter registers a callback when entering state s.
-func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnEnter(s State, f func(to State, sp SP, e Symbol, ep IP)) *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey] {
+func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnEnter(s State, f func(sp SP, e Symbol, ep IP)) *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey] {
 	target := s.Key()
 	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep IP) {
 		fromKey := from.Key()
 		toKey := to.Key()
 		if toKey == target && fromKey != toKey {
-			f(to, sp, e, ep)
+			f(sp, e, ep)
 		}
 	}
 	b.enterCallbacks = append(b.enterCallbacks, decoratedFunc)

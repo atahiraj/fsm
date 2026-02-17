@@ -151,13 +151,13 @@ func TestNFABuilderBuildEngineObserverOrder(t *testing.T) {
 	b.WithOnStepAny(func(from []nfaState, _ struct{}, to []nfaState, _ nfaSymbol, _ struct{}) {
 		order = append(order, "step:any")
 	})
-	b.WithOnStep([]nfaState{0, 1}, []nfaState{1}, func(from []nfaState, _ struct{}, to []nfaState, _ nfaSymbol, _ struct{}) {
+	b.WithOnStep([]nfaState{0, 1}, []nfaState{1}, func(_ struct{}, _ nfaSymbol, _ struct{}) {
 		order = append(order, "step:[0 1]->[1]")
 	})
-	b.WithOnExit([]nfaState{0, 1}, func(from []nfaState, _ struct{}, _ nfaSymbol, _ struct{}) {
+	b.WithOnExit([]nfaState{0, 1}, func(_ struct{}, _ nfaSymbol, _ struct{}) {
 		order = append(order, "exit:[0 1]")
 	})
-	b.WithOnEnter([]nfaState{1}, func(to []nfaState, _ struct{}, _ nfaSymbol, _ struct{}) {
+	b.WithOnEnter([]nfaState{1}, func(_ struct{}, _ nfaSymbol, _ struct{}) {
 		order = append(order, "enter:[1]")
 	})
 
@@ -186,10 +186,10 @@ func TestNFABuilderEnterExitCallbacksIgnoreSelfTransition(t *testing.T) {
 	var enterCalls int
 	var exitCalls int
 
-	b.WithOnEnter([]nfaState{0}, func(to []nfaState, _ struct{}, _ nfaSymbol, _ struct{}) {
+	b.WithOnEnter([]nfaState{0}, func(_ struct{}, _ nfaSymbol, _ struct{}) {
 		enterCalls++
 	})
-	b.WithOnExit([]nfaState{0}, func(from []nfaState, _ struct{}, _ nfaSymbol, _ struct{}) {
+	b.WithOnExit([]nfaState{0}, func(_ struct{}, _ nfaSymbol, _ struct{}) {
 		exitCalls++
 	})
 
@@ -270,7 +270,7 @@ func TestNFABuilderBuildAtomicEngine(t *testing.T) {
 		WithTransition(0, "a", 1)
 
 	var calls int
-	b.WithOnEnter([]nfaState{1}, func(to []nfaState, _ struct{}, _ nfaSymbol, _ struct{}) {
+	b.WithOnEnter([]nfaState{1}, func(_ struct{}, _ nfaSymbol, _ struct{}) {
 		calls++
 	})
 
