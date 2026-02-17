@@ -198,6 +198,50 @@ func TestDFABuilderBuildEngineObserverOrder(t *testing.T) {
 	}
 }
 
+func TestDFABuilderEnterExitCallbacksIgnoreSelfTransition(t *testing.T) {
+	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
+	b.WithStart(0).
+		WithAccepting(0).
+		WithTransition(0, "a", 0)
+
+	var enterAnyCalls int
+	var enterCalls int
+	var exitAnyCalls int
+	var exitCalls int
+
+	b.WithOnEnterAny(func(to dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+		enterAnyCalls++
+	})
+	b.WithOnEnter(0, func(to dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+		enterCalls++
+	})
+	b.WithOnExitAny(func(from dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+		exitAnyCalls++
+	})
+	b.WithOnExit(0, func(from dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+		exitCalls++
+	})
+
+	e, err := b.BuildEngine()
+	if err != nil {
+		t.Fatalf("BuildEngine() error = %v", err)
+	}
+	e.Step("a", struct{}{})
+
+	if enterAnyCalls != 0 {
+		t.Fatalf("onEnterAny calls = %d, want 0", enterAnyCalls)
+	}
+	if enterCalls != 0 {
+		t.Fatalf("onEnter calls = %d, want 0", enterCalls)
+	}
+	if exitAnyCalls != 0 {
+		t.Fatalf("onExitAny calls = %d, want 0", exitAnyCalls)
+	}
+	if exitCalls != 0 {
+		t.Fatalf("onExit calls = %d, want 0", exitCalls)
+	}
+}
+
 func TestDFABuilderWithObserverOverride(t *testing.T) {
 	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
 	b.WithStart(0).

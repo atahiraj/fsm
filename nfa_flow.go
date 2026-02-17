@@ -160,8 +160,10 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithOnStep(from
 // WithOnExit registers a callback when leaving configuration s.
 func (b *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithOnExit(s []State, f func(from []State, sp SP, e Symbol, ep IP)) *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	keySet := stateSetToKeySet(s)
-	decoratedFunc := func(from []State, sp SP, _ []State, e Symbol, ep IP) {
-		if keySet.Equals(stateSetToKeySet(from)) {
+	decoratedFunc := func(from []State, sp SP, to []State, e Symbol, ep IP) {
+		fromKeySet := stateSetToKeySet(from)
+		toKeySet := stateSetToKeySet(to)
+		if keySet.Equals(fromKeySet) && !fromKeySet.Equals(toKeySet) {
 			f(from, sp, e, ep)
 		}
 	}
@@ -172,8 +174,10 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithOnExit(s []
 // WithOnEnter registers a callback when entering configuration s.
 func (b *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithOnEnter(s []State, f func(to []State, sp SP, e Symbol, ep IP)) *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	keySet := stateSetToKeySet(s)
-	decoratedFunc := func(_ []State, sp SP, to []State, e Symbol, ep IP) {
-		if keySet.Equals(stateSetToKeySet(to)) {
+	decoratedFunc := func(from []State, sp SP, to []State, e Symbol, ep IP) {
+		fromKeySet := stateSetToKeySet(from)
+		toKeySet := stateSetToKeySet(to)
+		if keySet.Equals(toKeySet) && !fromKeySet.Equals(toKeySet) {
 			f(to, sp, e, ep)
 		}
 	}
