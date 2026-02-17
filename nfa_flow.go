@@ -269,7 +269,7 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) BuildEngine() (
 	if err != nil {
 		return nil, err
 	}
-	return engine.NFA[State, Symbol, []State, SP, IP](n).WithObserver(obs).Build()
+	return engine.NFA[State, Symbol, SP, IP](n).WithObserver(obs).Build()
 }
 
 // BuildAtomicEngine wires the NFA and observer into a thread-safe Engine.
@@ -286,7 +286,7 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) BuildAtomicEngi
 	if err != nil {
 		return nil, err
 	}
-	return engine.NFA[State, Symbol, []State, SP, IP](n).WithObserver(obs).BuildAtomic()
+	return engine.NFA[State, Symbol, SP, IP](n).WithObserver(obs).BuildAtomic()
 }
 
 // BuildRunner wires the NFA and observer into an Engine-backed Runner.

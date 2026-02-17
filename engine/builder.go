@@ -46,8 +46,8 @@ func DFA[State any, Symbol any, SP any, IP any](d dfaLike[State, Symbol]) *Build
 }
 
 // NFA constructs a Builder backed by an NFA-like machine.
-func NFA[State any, Symbol any, Config any, SP any, IP any](n nfaLike[State, Symbol, Config]) *Builder[Config, Symbol, SP, IP] {
-	return NewBuilder[Config, Symbol, SP, IP](nfaFSM[State, Symbol, Config]{n: n})
+func NFA[State any, Symbol any, SP any, IP any](n nfaLike[State, Symbol]) *Builder[[]State, Symbol, SP, IP] {
+	return NewBuilder[[]State, Symbol, SP, IP](nfaFSM[State, Symbol]{n: n})
 }
 
 type dfaLike[State any, Symbol any] interface {
@@ -56,11 +56,11 @@ type dfaLike[State any, Symbol any] interface {
 	IsAccepting(state State) bool
 }
 
-type nfaLike[State any, Symbol any, Config any] interface {
-	StartSet() Config
-	EpsilonClosureSet(states Config) Config
-	DeltaSet(states Config, a Symbol) Config
-	IsAccepting(states Config) bool
+type nfaLike[State any, Symbol any] interface {
+	StartSet() []State
+	EpsilonClosureSet(states []State) []State
+	DeltaSet(states []State, a Symbol) []State
+	IsAccepting(states []State) bool
 }
 
 type dfaFSM[State any, Symbol any] struct {
@@ -83,20 +83,20 @@ func (f dfaFSM[State, Symbol]) IsAccepting(s State) bool {
 	return f.d.IsAccepting(s)
 }
 
-type nfaFSM[State any, Symbol any, Config any] struct {
-	n nfaLike[State, Symbol, Config]
+type nfaFSM[State any, Symbol any] struct {
+	n nfaLike[State, Symbol]
 }
 
-func (f nfaFSM[State, Symbol, Config]) Start() Config {
+func (f nfaFSM[State, Symbol]) Start() []State {
 	return f.n.EpsilonClosureSet(f.n.StartSet())
 }
 
-func (f nfaFSM[State, Symbol, Config]) Step(conf Config, a Symbol) Config {
+func (f nfaFSM[State, Symbol]) Step(conf []State, a Symbol) []State {
 	cur := f.n.EpsilonClosureSet(conf)
 	cur = f.n.DeltaSet(cur, a)
 	return f.n.EpsilonClosureSet(cur)
 }
 
-func (f nfaFSM[State, Symbol, Config]) IsAccepting(conf Config) bool {
+func (f nfaFSM[State, Symbol]) IsAccepting(conf []State) bool {
 	return f.n.IsAccepting(conf)
 }
