@@ -1,6 +1,8 @@
 package fsm
 
 import (
+	"errors"
+
 	"github.com/stnhrsprkwns/fsm/dfa"
 	"github.com/stnhrsprkwns/fsm/engine"
 	"github.com/stnhrsprkwns/fsm/observer"
@@ -40,14 +42,10 @@ func DFA[
 	SP any,
 	EP any,
 ]() *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	stateEqual := func(a, b State) bool { return a.Key() == b.Key() }
-	b := &DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]{
-		dfa: dfa.NewBuilder[State, Symbol, StateKey, SymbolKey](),
+	return &DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]{
+		dfa:  dfa.NewBuilder[State, Symbol](),
+		exec: DefaultExecutor[State, Symbol, SP, EP]{},
 	}
-	b.obs = observer.NewBuilder[State, Symbol, SP, EP, State]().
-		WithEqualState(stateEqual).
-		WithExecutor(DefaultExecutor[State, Symbol, SP, EP]{})
-	return b
 }
 
 // NewDFABuilder constructs a low-level DFA builder.
@@ -59,10 +57,8 @@ func NewDFABuilder[
 	SP any,
 	EP any,
 ]() *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	stateEqual := func(a, b State) bool { return a.Key() == b.Key() }
 	return &DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]{
-		dfa: dfa.NewBuilder[State, Symbol, StateKey, SymbolKey](),
-		obs: observer.NewBuilder[State, Symbol, SP, EP, State]().WithEqualState(stateEqual),
+		dfa: dfa.NewBuilder[State, Symbol](),
 	}
 }
 
@@ -75,8 +71,19 @@ type DFABuilder[
 	SP any,
 	EP any,
 ] struct {
-	dfa         *dfa.Builder[State, Symbol, StateKey, SymbolKey]
-	obs         *observer.Builder[State, Symbol, SP, EP, State]
+	dfa *dfa.Builder[State, Symbol, StateKey, SymbolKey]
+
+	exec Executor[State, Symbol, SP, EP]
+
+	// Dispatch order is fixed by phase:
+	// step-any -> step -> exit-any -> exit -> enter-any -> enter
+	stepAnyCallbacks  []func(from State, sp SP, to State, e Symbol, ep EP)
+	stepCallbacks     []func(from State, sp SP, to State, e Symbol, ep EP)
+	exitAnyCallbacks  []func(from State, sp SP, to State, e Symbol, ep EP)
+	exitCallbacks     []func(from State, sp SP, to State, e Symbol, ep EP)
+	enterAnyCallbacks []func(from State, sp SP, to State, e Symbol, ep EP)
+	enterCallbacks    []func(from State, sp SP, to State, e Symbol, ep EP)
+
 	dfaOverride *dfa.DFA[State, Symbol, StateKey, SymbolKey]
 	obsOverride engine.Observer[State, Symbol, SP, EP]
 	err         error
@@ -138,43 +145,71 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithObserver(ob
 
 // WithExecutor sets the observer executor.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithExecutor(exec Executor[State, Symbol, SP, EP]) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	b.obs.WithExecutor(exec)
+	b.exec = exec
 	return b
 }
 
 // WithOnStepAny registers a callback for every step.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnStepAny(f func(from State, sp SP, to State, e Symbol, ep EP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	b.obs.OnStepAny(f)
+	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep EP) {
+		f(from, sp, to, e, ep)
+	}
+	b.stepAnyCallbacks = append(b.stepAnyCallbacks, decoratedFunc)
 	return b
 }
 
 // WithOnStep registers a callback for a specific transition from -> to.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnStep(from State, to State, f func(from State, sp SP, to State, e Symbol, ep EP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	b.obs.OnStep(from, to, f)
+	fromKey := from.Key()
+	toKey := to.Key()
+	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep EP) {
+		if from.Key() == fromKey && to.Key() == toKey {
+			f(from, sp, to, e, ep)
+		}
+	}
+	b.stepCallbacks = append(b.stepCallbacks, decoratedFunc)
 	return b
 }
 
 // WithOnExit registers a callback when leaving state s.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnExit(s State, f func(from State, sp SP, e Symbol, ep EP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	b.obs.OnExit(s, f)
+	target := s.Key()
+	decoratedFunc := func(from State, sp SP, _ State, e Symbol, ep EP) {
+		if from.Key() == target {
+			f(from, sp, e, ep)
+		}
+	}
+	b.exitCallbacks = append(b.exitCallbacks, decoratedFunc)
 	return b
 }
 
 // WithOnEnter registers a callback when entering state s.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnEnter(s State, f func(to State, sp SP, e Symbol, ep EP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	b.obs.OnEnter(s, f)
+	target := s.Key()
+	decoratedFunc := func(_ State, sp SP, to State, e Symbol, ep EP) {
+		if to.Key() == target {
+			f(to, sp, e, ep)
+		}
+	}
+	b.enterCallbacks = append(b.enterCallbacks, decoratedFunc)
 	return b
 }
 
 // WithOnExitAny registers a callback when leaving any state.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnExitAny(f func(from State, sp SP, e Symbol, ep EP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	b.obs.OnExitAny(f)
+	decoratedFunc := func(from State, sp SP, _ State, e Symbol, ep EP) {
+		f(from, sp, e, ep)
+	}
+	b.exitAnyCallbacks = append(b.exitAnyCallbacks, decoratedFunc)
 	return b
 }
 
 // WithOnEnterAny registers a callback when entering any state.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) WithOnEnterAny(f func(to State, sp SP, e Symbol, ep EP)) *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP] {
-	b.obs.OnEnterAny(f)
+	decoratedFunc := func(_ State, sp SP, to State, e Symbol, ep EP) {
+		f(to, sp, e, ep)
+	}
+	b.enterAnyCallbacks = append(b.enterAnyCallbacks, decoratedFunc)
 	return b
 }
 
@@ -198,12 +233,41 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) BuildAtomicDFA(
 	return dfa.NewAtomic(d), nil
 }
 
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) buildObserver() (engine.Observer[State, Symbol, SP, EP], error) {
+	if b.exec == nil {
+		return nil, errors.New("observer builder: executor is nil")
+	}
+
+	total := len(b.stepAnyCallbacks) + len(b.stepCallbacks) + len(b.exitAnyCallbacks) + len(b.exitCallbacks) + len(b.enterAnyCallbacks) + len(b.enterCallbacks)
+	callbacks := make([]func(from State, sp SP, to State, e Symbol, ep EP), 0, total)
+	for _, callback := range b.stepAnyCallbacks {
+		callbacks = append(callbacks, callback)
+	}
+	for _, callback := range b.stepCallbacks {
+		callbacks = append(callbacks, callback)
+	}
+	for _, callback := range b.exitAnyCallbacks {
+		callbacks = append(callbacks, callback)
+	}
+	for _, callback := range b.exitCallbacks {
+		callbacks = append(callbacks, callback)
+	}
+	for _, callback := range b.enterAnyCallbacks {
+		callbacks = append(callbacks, callback)
+	}
+	for _, callback := range b.enterCallbacks {
+		callbacks = append(callbacks, callback)
+	}
+
+	return observer.NewObserver[State, Symbol, SP, EP, State](b.exec, callbacks...), nil
+}
+
 // BuildEngine wires the DFA and observer into an Engine.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) BuildEngine() (*engine.Engine[State, Symbol, SP, EP], error) {
 	obs := b.obsOverride
 	if obs == nil {
 		var err error
-		obs, err = b.obs.Build()
+		obs, err = b.buildObserver()
 		if err != nil {
 			return nil, err
 		}
@@ -220,7 +284,7 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey, SP, EP]) BuildAtomicEngi
 	obs := b.obsOverride
 	if obs == nil {
 		var err error
-		obs, err = b.obs.Build()
+		obs, err = b.buildObserver()
 		if err != nil {
 			return nil, err
 		}

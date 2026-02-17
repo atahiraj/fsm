@@ -2,7 +2,6 @@ package fsm
 
 import (
 	"context"
-	"strconv"
 	"testing"
 
 	nfapkg "github.com/stnhrsprkwns/fsm/nfa"
@@ -155,11 +154,11 @@ func TestNFABuilderBuildEngineObserverOrder(t *testing.T) {
 	b.WithOnStep([]nfaState{0, 1}, []nfaState{1}, func(from []nfaState, _ struct{}, to []nfaState, _ nfaSymbol, _ struct{}) {
 		order = append(order, "step:[0 1]->[1]")
 	})
-	b.WithOnEnterAny(func(to []nfaState, _ struct{}, _ nfaSymbol, _ struct{}) {
-		order = append(order, "enter:any")
+	b.WithOnExit([]nfaState{0, 1}, func(from []nfaState, _ struct{}, _ nfaSymbol, _ struct{}) {
+		order = append(order, "exit:[0 1]")
 	})
-	b.WithOnExitAny(func(from []nfaState, _ struct{}, _ nfaSymbol, _ struct{}) {
-		order = append(order, "exit:any")
+	b.WithOnEnter([]nfaState{1}, func(to []nfaState, _ struct{}, _ nfaSymbol, _ struct{}) {
+		order = append(order, "enter:[1]")
 	})
 
 	e, err := b.BuildEngine()
@@ -170,7 +169,7 @@ func TestNFABuilderBuildEngineObserverOrder(t *testing.T) {
 	if len(order) != 4 {
 		t.Fatalf("order len = %d, want 4", len(order))
 	}
-	want := []string{"step:any", "step:[0 1]->[1]", "exit:any", "enter:any"}
+	want := []string{"exit:[0 1]", "step:any", "step:[0 1]->[1]", "enter:[1]"}
 	for i := range want {
 		if order[i] != want[i] {
 			t.Fatalf("order[%d] = %q, want %q", i, order[i], want[i])
@@ -185,17 +184,11 @@ func TestNFABuilderStateCallbacks(t *testing.T) {
 		WithTransition(0, "a", 1)
 
 	var got []string
-	b.WithOnExitStateAny(func(state nfaState, _ struct{}, _ nfaSymbol, _ struct{}) {
-		got = append(got, "exit:any:"+strconv.Itoa(int(state)))
-	})
 	b.WithOnExitState(0, func(_ struct{}, _ nfaSymbol, _ struct{}) {
 		got = append(got, "exit:0")
 	})
 	b.WithOnExitState(2, func(_ struct{}, _ nfaSymbol, _ struct{}) {
 		got = append(got, "exit:2")
-	})
-	b.WithOnEnterStateAny(func(state nfaState, _ struct{}, _ nfaSymbol, _ struct{}) {
-		got = append(got, "enter:any:"+strconv.Itoa(int(state)))
 	})
 	b.WithOnEnterState(1, func(_ struct{}, _ nfaSymbol, _ struct{}) {
 		got = append(got, "enter:1")
@@ -210,7 +203,7 @@ func TestNFABuilderStateCallbacks(t *testing.T) {
 	}
 	e.Step("a", struct{}{})
 
-	want := []string{"exit:any:0", "exit:0", "enter:any:1", "enter:1"}
+	want := []string{"exit:0", "enter:1"}
 	if len(got) != len(want) {
 		t.Fatalf("callbacks len = %d, want %d (%v)", len(got), len(want), got)
 	}
@@ -247,7 +240,7 @@ func TestNFABuilderBuildAtomicEngine(t *testing.T) {
 		WithTransition(0, "a", 1)
 
 	var calls int
-	b.WithOnEnterAny(func(to []nfaState, _ struct{}, _ nfaSymbol, _ struct{}) {
+	b.WithOnEnter([]nfaState{1}, func(to []nfaState, _ struct{}, _ nfaSymbol, _ struct{}) {
 		calls++
 	})
 
@@ -257,7 +250,7 @@ func TestNFABuilderBuildAtomicEngine(t *testing.T) {
 	}
 	e.Step("a", struct{}{})
 	if calls != 1 {
-		t.Fatalf("onEnterAny calls = %d, want 1", calls)
+		t.Fatalf("onEnter calls = %d, want 1", calls)
 	}
 }
 
