@@ -76,6 +76,8 @@ type DFABuilder[
 
 	exec Executor[State, Symbol, SP, IP]
 
+	selfTransitionCallbacks bool
+
 	// Dispatch order is fixed by phase:
 	// step-any -> step -> exit-any -> exit -> enter-any -> enter
 	stepAnyCallbacks  []func(from State, sp SP, to State, e Symbol, ep IP)
@@ -150,6 +152,12 @@ func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithExecutor(ex
 	return b
 }
 
+// WithSelfTransitionCallbacks enables enter/exit callbacks for self-transitions (from == to).
+func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithSelfTransitionCallbacks() *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey] {
+	b.selfTransitionCallbacks = true
+	return b
+}
+
 // WithOnStepAny registers a callback for every step.
 func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnStepAny(f func(from State, sp SP, to State, e Symbol, ep IP)) *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey] {
 	b.stepAnyCallbacks = append(b.stepAnyCallbacks, f)
@@ -175,7 +183,7 @@ func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnExit(s St
 	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep IP) {
 		fromKey := from.Key()
 		toKey := to.Key()
-		if fromKey == target && fromKey != toKey {
+		if fromKey == target && (b.selfTransitionCallbacks || fromKey != toKey) {
 			f(sp, e, ep)
 		}
 	}
@@ -189,7 +197,7 @@ func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnEnter(s S
 	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep IP) {
 		fromKey := from.Key()
 		toKey := to.Key()
-		if toKey == target && fromKey != toKey {
+		if toKey == target && (b.selfTransitionCallbacks || fromKey != toKey) {
 			f(sp, e, ep)
 		}
 	}
@@ -200,7 +208,7 @@ func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnEnter(s S
 // WithOnExitAny registers a callback when leaving any state.
 func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnExitAny(f func(from State, sp SP, e Symbol, ep IP)) *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey] {
 	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep IP) {
-		if from.Key() != to.Key() {
+		if b.selfTransitionCallbacks || from.Key() != to.Key() {
 			f(from, sp, e, ep)
 		}
 	}
@@ -211,7 +219,7 @@ func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnExitAny(f
 // WithOnEnterAny registers a callback when entering any state.
 func (b *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey]) WithOnEnterAny(f func(to State, sp SP, e Symbol, ep IP)) *DFABuilder[State, Symbol, SP, IP, StateKey, SymbolKey] {
 	decoratedFunc := func(from State, sp SP, to State, e Symbol, ep IP) {
-		if from.Key() != to.Key() {
+		if b.selfTransitionCallbacks || from.Key() != to.Key() {
 			f(to, sp, e, ep)
 		}
 	}

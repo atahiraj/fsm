@@ -207,6 +207,37 @@ func TestNFABuilderEnterExitCallbacksIgnoreSelfTransition(t *testing.T) {
 	}
 }
 
+func TestNFABuilderEnterExitCallbacksIncludeSelfTransitionWhenEnabled(t *testing.T) {
+	b := NFA[nfaState, nfaSymbol, int, string, struct{}, struct{}]()
+	b.WithStart(0).
+		WithAccepting(0).
+		WithTransition(0, "a", 0).
+		WithSelfTransitionCallbacks()
+
+	var enterCalls int
+	var exitCalls int
+
+	b.WithOnEnter([]nfaState{0}, func(_ struct{}, _ nfaSymbol, _ struct{}) {
+		enterCalls++
+	})
+	b.WithOnExit([]nfaState{0}, func(_ struct{}, _ nfaSymbol, _ struct{}) {
+		exitCalls++
+	})
+
+	e, err := b.BuildEngine()
+	if err != nil {
+		t.Fatalf("BuildEngine() error = %v", err)
+	}
+	e.Step("a", struct{}{})
+
+	if enterCalls != 1 {
+		t.Fatalf("onEnter calls = %d, want 1", enterCalls)
+	}
+	if exitCalls != 1 {
+		t.Fatalf("onExit calls = %d, want 1", exitCalls)
+	}
+}
+
 func TestNFABuilderStateCallbacks(t *testing.T) {
 	b := NFA[nfaState, nfaSymbol, int, string, struct{}, struct{}]()
 	b.WithStart(0).

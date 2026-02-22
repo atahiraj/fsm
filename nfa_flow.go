@@ -61,6 +61,8 @@ type NFABuilder[
 
 	exec Executor[[]State, Symbol, SP, IP]
 
+	selfTransitionCallbacks bool
+
 	// Dispatch order is fixed by phase:
 	// exit-state -> exit -> step-any -> step -> enter-state -> enter
 	exitStateCallbacks  []nfaObserverCallback[State, Symbol, SP, IP]
@@ -134,6 +136,12 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithExecutor(ex
 	return b
 }
 
+// WithSelfTransitionCallbacks enables config-level enter/exit callbacks when the configuration is unchanged.
+func (b *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithSelfTransitionCallbacks() *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
+	b.selfTransitionCallbacks = true
+	return b
+}
+
 // WithOnStepAny registers a callback for every step.
 func (b *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithOnStepAny(f func(from []State, sp SP, to []State, e Symbol, ep IP)) *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP] {
 	b.stepAnyCallbacks = append(b.stepAnyCallbacks, f)
@@ -160,7 +168,7 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithOnExit(s []
 	decoratedFunc := func(from []State, sp SP, to []State, e Symbol, ep IP) {
 		fromKeySet := stateSetToKeySet(from)
 		toKeySet := stateSetToKeySet(to)
-		if keySet.Equals(fromKeySet) && !fromKeySet.Equals(toKeySet) {
+		if keySet.Equals(fromKeySet) && (b.selfTransitionCallbacks || !fromKeySet.Equals(toKeySet)) {
 			f(sp, e, ep)
 		}
 	}
@@ -174,7 +182,7 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey, SP, IP]) WithOnEnter(s [
 	decoratedFunc := func(from []State, sp SP, to []State, e Symbol, ep IP) {
 		fromKeySet := stateSetToKeySet(from)
 		toKeySet := stateSetToKeySet(to)
-		if keySet.Equals(toKeySet) && !fromKeySet.Equals(toKeySet) {
+		if keySet.Equals(toKeySet) && (b.selfTransitionCallbacks || !fromKeySet.Equals(toKeySet)) {
 			f(sp, e, ep)
 		}
 	}
