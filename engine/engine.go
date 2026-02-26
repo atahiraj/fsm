@@ -5,7 +5,8 @@ package engine
 // I = input symbol.
 type FSM[S any, I any] interface {
 	Start() S
-	Step(s S, a I) S
+	// Step returns the next configuration and whether a transition exists.
+	Step(s S, a I) (S, bool)
 	IsAccepting(s S) bool
 }
 
@@ -41,9 +42,34 @@ func (e *Engine[S, I, SP, IP]) Reset(p SP) {
 func (e *Engine[S, I, SP, IP]) Cur() S          { return e.cur }
 func (e *Engine[S, I, SP, IP]) Accepting() bool { return e.fsm.IsAccepting(e.cur) }
 
-// Step advances the machine by one symbol and notifies the observer.
+// Step attempts to advance the machine by one symbol.
+// It is a no-op when no transition exists.
 func (e *Engine[S, I, SP, IP]) Step(symbol I, payload IP) {
-	to := e.fsm.Step(e.cur, symbol)
+	_ = e.TryStep(symbol, payload)
+}
+
+// TryStep advances the machine by one symbol and reports whether a transition existed.
+// The observer is notified only when a transition exists.
+func (e *Engine[S, I, SP, IP]) TryStep(symbol I, payload IP) bool {
+	to, ok := e.fsm.Step(e.cur, symbol)
+	if !ok {
+		return false
+	}
 	e.obs.OnStep(e.cur, e.payload, to, symbol, payload)
 	e.cur = to
+	return true
+}
+
+// CanStep reports whether a transition exists for the current configuration and symbol.
+// It does not update engine state or notify the observer.
+func (e *Engine[S, I, SP, IP]) CanStep(symbol I) bool {
+	_, ok := e.PeekStep(symbol)
+	return ok
+}
+
+// PeekStep reports the next configuration for a symbol without mutating engine state.
+// It does not update engine state or notify the observer.
+func (e *Engine[S, I, SP, IP]) PeekStep(symbol I) (S, bool) {
+	next, ok := e.fsm.Step(e.cur, symbol)
+	return next, ok
 }

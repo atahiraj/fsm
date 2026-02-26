@@ -36,9 +36,30 @@ func (a *AtomicEngine[S, I, SP, IP]) Accepting() bool {
 	return a.e.Accepting()
 }
 
-// Step advances the machine by one symbol and notifies the observer.
+// Step attempts to advance the machine by one symbol.
 func (a *AtomicEngine[S, I, SP, IP]) Step(symbol I, payload IP) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.e.Step(symbol, payload)
+}
+
+// TryStep advances the machine by one symbol and reports whether a transition existed.
+func (a *AtomicEngine[S, I, SP, IP]) TryStep(symbol I, payload IP) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.e.TryStep(symbol, payload)
+}
+
+// CanStep reports whether a transition exists for the current configuration and symbol.
+func (a *AtomicEngine[S, I, SP, IP]) CanStep(symbol I) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.e.CanStep(symbol)
+}
+
+// PeekStep reports the next configuration for a symbol without mutating engine state.
+func (a *AtomicEngine[S, I, SP, IP]) PeekStep(symbol I) (S, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.e.PeekStep(symbol)
 }

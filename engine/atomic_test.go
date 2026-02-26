@@ -7,9 +7,9 @@ import (
 
 type testFSM struct{}
 
-func (testFSM) Start() int             { return 0 }
-func (testFSM) Step(s int, _ byte) int { return s + 1 }
-func (testFSM) IsAccepting(s int) bool { return s%2 == 0 }
+func (testFSM) Start() int                     { return 0 }
+func (testFSM) Step(s int, _ byte) (int, bool) { return s + 1, true }
+func (testFSM) IsAccepting(s int) bool         { return s%2 == 0 }
 
 type noopObserver struct{}
 

@@ -71,12 +71,12 @@ func (f dfaFSM[State, Symbol]) Start() State {
 	return f.d.Start()
 }
 
-func (f dfaFSM[State, Symbol]) Step(s State, a Symbol) State {
+func (f dfaFSM[State, Symbol]) Step(s State, a Symbol) (State, bool) {
 	next, ok := f.d.Delta(s, a)
 	if !ok {
-		return s
+		return s, false
 	}
-	return next
+	return next, true
 }
 
 func (f dfaFSM[State, Symbol]) IsAccepting(s State) bool {
@@ -91,10 +91,10 @@ func (f nfaFSM[State, Symbol]) Start() []State {
 	return f.n.EpsilonClosureSet(f.n.StartSet())
 }
 
-func (f nfaFSM[State, Symbol]) Step(conf []State, a Symbol) []State {
+func (f nfaFSM[State, Symbol]) Step(conf []State, a Symbol) ([]State, bool) {
 	cur := f.n.EpsilonClosureSet(conf)
-	cur = f.n.DeltaSet(cur, a)
-	return f.n.EpsilonClosureSet(cur)
+	next := f.n.DeltaSet(cur, a)
+	return f.n.EpsilonClosureSet(next), len(next) > 0
 }
 
 func (f nfaFSM[State, Symbol]) IsAccepting(conf []State) bool {
