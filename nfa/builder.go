@@ -197,6 +197,14 @@ func (b *Builder[State, Symbol, StateKey, SymbolKey]) Build() (*NFA[State, Symbo
 	if b.gLike == nil && b.g == nil {
 		return nil, errors.New("nfa builder: graph is nil")
 	}
+	if b.gLike != nil {
+		if b.states.Len() == 0 {
+			return nil, errors.New("nfa builder: WithGraph requires states; add Q with AddStates")
+		}
+		if b.alphabet.Len() == 0 {
+			return nil, errors.New("nfa builder: WithGraph requires alphabet; add Σ with AddAlphabet")
+		}
+	}
 
 	var delta Deltaer[StateKey, SymbolKey] = graphDeltaer[StateKey, SymbolKey]{g: b.g}
 	if b.gLike != nil {

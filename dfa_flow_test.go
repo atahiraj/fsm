@@ -90,6 +90,41 @@ func TestDFABuilderBuildDFAAccepts(t *testing.T) {
 	}
 }
 
+func TestDFABuilderWithTransitionHook(t *testing.T) {
+	b := DFA[dfaState, dfaSymbol]()
+
+	var order []string
+	b.WithStart(0).
+		WithAccepting(1).
+		WithTransitionHook(
+			0,
+			"a",
+			1,
+			func(e dfaSymbol) {
+				if e != "a" {
+					t.Fatalf("unexpected symbol = %q, want %q", e, "a")
+				}
+				order = append(order, "first")
+			},
+			func(e dfaSymbol) {
+				order = append(order, "second")
+			},
+		)
+
+	e, err := b.BuildEngine()
+	if err != nil {
+		t.Fatalf("BuildEngine() error = %v", err)
+	}
+	e.Step("a")
+
+	if len(order) != 2 {
+		t.Fatalf("transition hook calls = %d, want 2", len(order))
+	}
+	if order[0] != "first" || order[1] != "second" {
+		t.Fatalf("transition hook order = %v, want [first second]", order)
+	}
+}
+
 func TestDFABuilderWithGraphOverride(t *testing.T) {
 	g := dfaGraph{next: map[dfaState]map[dfaSymbol]dfaState{
 		0: {"a": 1},
@@ -162,10 +197,10 @@ func TestDFABuilderBuildEngineTransitionHooksOrder(t *testing.T) {
 		WithTransition(1, "b", 0)
 
 	var order []string
-	b.WithOnStepAny(func(from dfaState, to dfaState, e dfaSymbol) {
+	b.WithOnTransitionAny(func(from dfaState, to dfaState, e dfaSymbol) {
 		order = append(order, "step:any")
 	})
-	b.WithOnStep(0, 1, func(e dfaSymbol) {
+	b.WithOnTransition(0, 1, func(e dfaSymbol) {
 		order = append(order, "step:0->1")
 	})
 	b.WithOnEnterAny(func(to dfaState, e dfaSymbol) {
@@ -334,7 +369,7 @@ func TestDFABuilderBuildRunner(t *testing.T) {
 		WithTransition(0, "a", 1)
 
 	var calls int
-	b.WithOnStepAny(func(from dfaState, to dfaState, e dfaSymbol) {
+	b.WithOnTransitionAny(func(from dfaState, to dfaState, e dfaSymbol) {
 		calls++
 	})
 

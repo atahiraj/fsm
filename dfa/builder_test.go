@@ -1,6 +1,7 @@
 package dfa
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stnhrsprkwns/fsm/graph"
@@ -134,5 +135,32 @@ func TestWithGraphAtomicGraph(t *testing.T) {
 	}
 	if d.Accepts(bWord('0', '1')) {
 		t.Fatalf("expected rejection for odd ones")
+	}
+}
+
+func TestWithGraphRequiresStates(t *testing.T) {
+	g := graph.New[bState, bSymbol]()
+	g.AddEdge(0, 1, 'a')
+
+	b := NewBuilder[bState, bSymbol, int, byte]()
+	b.WithGraph(g)
+	b.AddAlphabet('a')
+
+	if _, err := b.Build(); err == nil || !strings.Contains(err.Error(), "requires states") {
+		t.Fatalf("Build() error = %v, want missing states error", err)
+	}
+}
+
+func TestWithGraphRequiresAlphabet(t *testing.T) {
+	g := graph.New[bState, bSymbol]()
+	g.AddEdge(0, 1, 'a')
+
+	b := NewBuilder[bState, bSymbol, int, byte]()
+	b.WithGraph(g)
+	b.SetStart(0)
+	b.AddAccepting(1)
+
+	if _, err := b.Build(); err == nil || !strings.Contains(err.Error(), "requires alphabet") {
+		t.Fatalf("Build() error = %v, want missing alphabet error", err)
 	}
 }

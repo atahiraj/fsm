@@ -148,10 +148,10 @@ func TestNFABuilderBuildEngineTransitionHooksOrder(t *testing.T) {
 		WithEpsilon(0, 1)
 
 	var order []string
-	b.WithOnStepAny(func(from []nfaState, to []nfaState, e nfaSymbol) {
+	b.WithOnTransitionAny(func(from []nfaState, to []nfaState, e nfaSymbol) {
 		order = append(order, "step:any")
 	})
-	b.WithOnStep([]nfaState{0, 1}, []nfaState{1}, func(e nfaSymbol) {
+	b.WithOnTransition([]nfaState{0, 1}, []nfaState{1}, func(e nfaSymbol) {
 		order = append(order, "step:[0 1]->[1]")
 	})
 	b.WithOnExit([]nfaState{0, 1}, func(e nfaSymbol) {
@@ -322,7 +322,7 @@ func TestNFABuilderBuildRunner(t *testing.T) {
 		WithTransition(0, "a", 1)
 
 	var calls int
-	b.WithOnStepAny(func(from []nfaState, to []nfaState, e nfaSymbol) {
+	b.WithOnTransitionAny(func(from []nfaState, to []nfaState, e nfaSymbol) {
 		calls++
 	})
 

@@ -102,6 +102,9 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithDFA(d *dfa.DFA[Stat
 }
 
 // WithGraph replaces the graph used by the DFA builder.
+//
+// The graph only provides the transition relation (δ). You must still provide
+// the universe (Q, Σ), typically with WithStates and WithAlphabet.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithGraph(g DFAGraph[State, Symbol]) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
 	b.dfa.WithGraph(g)
 	return b
@@ -143,6 +146,30 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithTransition(from Sta
 	return b
 }
 
+// WithTransitionHook inserts (from, a, to) into δ and registers transition callbacks for from -> to.
+// Callbacks are executed in the same order as provided.
+// Preconditions: transition does not introduce nondeterminism.
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithTransitionHook(from State, symbol Symbol, to State, hooks ...func(e Symbol)) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
+	if b.err != nil {
+		return b
+	}
+	if err := b.dfa.Transition(from, symbol, to); err != nil {
+		b.err = err
+		return b
+	}
+	for _, hook := range hooks {
+		if hook == nil {
+			continue
+		}
+		b.stepCallbacks = append(b.stepCallbacks, dfaStepCallback[StateKey, Symbol]{
+			from:     from.Key(),
+			to:       to.Key(),
+			callback: hook,
+		})
+	}
+	return b
+}
+
 // WithTransitionHooks overrides the transition hooks used by the Engine build.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithTransitionHooks(hooks engine.TransitionHooks[State, Symbol]) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
 	b.hooksOverride = hooks
@@ -161,20 +188,32 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithSelfTransitionCallb
 	return b
 }
 
-// WithOnStepAny registers a callback for every step.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnStepAny(f func(from State, to State, e Symbol)) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
+// WithOnTransitionAny registers a callback for every transition.
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnTransitionAny(f func(from State, to State, e Symbol)) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
 	b.stepAnyCallbacks = append(b.stepAnyCallbacks, f)
 	return b
 }
 
-// WithOnStep registers a callback for a specific transition from -> to.
-func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnStep(from State, to State, f func(e Symbol)) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
+// WithOnTransition registers a callback for a specific transition from -> to.
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnTransition(from State, to State, f func(e Symbol)) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
 	b.stepCallbacks = append(b.stepCallbacks, dfaStepCallback[StateKey, Symbol]{
 		from:     from.Key(),
 		to:       to.Key(),
 		callback: f,
 	})
 	return b
+}
+
+// WithOnStepAny registers a callback for every transition.
+// Deprecated: use WithOnTransitionAny.
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnStepAny(f func(from State, to State, e Symbol)) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
+	return b.WithOnTransitionAny(f)
+}
+
+// WithOnStep registers a callback for a specific transition from -> to.
+// Deprecated: use WithOnTransition.
+func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnStep(from State, to State, f func(e Symbol)) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
+	return b.WithOnTransition(from, to, f)
 }
 
 // WithOnExit registers a callback when leaving state s.

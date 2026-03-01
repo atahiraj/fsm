@@ -91,6 +91,9 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithNFA(n *nfa.NFA[Stat
 }
 
 // WithGraph replaces the graph used by the NFA builder.
+//
+// The graph only provides the transition relation (δ, ε). You must still
+// provide the universe (Q, Σ), typically with WithStates and WithAlphabet.
 func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithGraph(g NFAGraph[State, Symbol]) *NFABuilder[State, Symbol, StateKey, SymbolKey] {
 	b.nfa.WithGraph(g)
 	return b
@@ -150,20 +153,32 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithSelfTransitionCallb
 	return b
 }
 
-// WithOnStepAny registers a callback for every step.
-func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnStepAny(f func(from []State, to []State, e Symbol)) *NFABuilder[State, Symbol, StateKey, SymbolKey] {
+// WithOnTransitionAny registers a callback for every transition.
+func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnTransitionAny(f func(from []State, to []State, e Symbol)) *NFABuilder[State, Symbol, StateKey, SymbolKey] {
 	b.stepAnyCallbacks = append(b.stepAnyCallbacks, f)
 	return b
 }
 
-// WithOnStep registers a callback for a specific transition from -> to.
-func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnStep(from []State, to []State, f func(e Symbol)) *NFABuilder[State, Symbol, StateKey, SymbolKey] {
+// WithOnTransition registers a callback for a specific transition from -> to.
+func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnTransition(from []State, to []State, f func(e Symbol)) *NFABuilder[State, Symbol, StateKey, SymbolKey] {
 	b.stepCallbacks = append(b.stepCallbacks, nfaStepCallback[State, StateKey, Symbol]{
 		fromKeys: stateSliceToUniqueKeys(from),
 		toKeys:   stateSliceToUniqueKeys(to),
 		callback: f,
 	})
 	return b
+}
+
+// WithOnStepAny registers a callback for every transition.
+// Deprecated: use WithOnTransitionAny.
+func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnStepAny(f func(from []State, to []State, e Symbol)) *NFABuilder[State, Symbol, StateKey, SymbolKey] {
+	return b.WithOnTransitionAny(f)
+}
+
+// WithOnStep registers a callback for a specific transition from -> to.
+// Deprecated: use WithOnTransition.
+func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnStep(from []State, to []State, f func(e Symbol)) *NFABuilder[State, Symbol, StateKey, SymbolKey] {
+	return b.WithOnTransition(from, to, f)
 }
 
 // WithOnExit registers a callback when leaving configuration s.
