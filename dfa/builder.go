@@ -9,39 +9,39 @@ import (
 	"github.com/stnhrsprkwns/fsm/key"
 )
 
-type graphLike[State any, Symbol any] interface {
-	Delta(from State, label Symbol) []State
+type graphLike[State any, Input any] interface {
+	Delta(from State, label Input) []State
 }
 
-type keyGraphLike[StateKey comparable, SymbolKey comparable] interface {
-	Delta(from StateKey, label SymbolKey) []StateKey
+type keyGraphLike[StateKey comparable, InputKey comparable] interface {
+	Delta(from StateKey, label InputKey) []StateKey
 }
 
-type graphDeltaer[StateKey comparable, SymbolKey comparable] struct {
-	g keyGraphLike[StateKey, SymbolKey]
+type graphDeltaer[StateKey comparable, InputKey comparable] struct {
+	g keyGraphLike[StateKey, InputKey]
 }
 
-func (d graphDeltaer[StateKey, SymbolKey]) Delta(state StateKey, symbol SymbolKey) (StateKey, bool) {
-	next := d.g.Delta(state, symbol)
+func (d graphDeltaer[StateKey, InputKey]) Delta(state StateKey, input InputKey) (StateKey, bool) {
+	next := d.g.Delta(state, input)
 	if len(next) != 1 {
 		panic("expected exactly one next state")
 	}
 	return next[0], true
 }
 
-type valueGraphDeltaer[State key.Keyer[StateKey], Symbol key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
-	g          graphLike[State, Symbol]
+type valueGraphDeltaer[State key.Keyer[StateKey], Input key.Keyer[InputKey], StateKey comparable, InputKey comparable] struct {
+	g          graphLike[State, Input]
 	stateByKey map[StateKey]State
-	symByKey   map[SymbolKey]Symbol
+	symByKey   map[InputKey]Input
 }
 
-func (d valueGraphDeltaer[State, Symbol, StateKey, SymbolKey]) Delta(state StateKey, symbol SymbolKey) (StateKey, bool) {
+func (d valueGraphDeltaer[State, Input, StateKey, InputKey]) Delta(state StateKey, input InputKey) (StateKey, bool) {
 	from, ok := d.stateByKey[state]
 	if !ok {
 		var zero StateKey
 		return zero, false
 	}
-	label, ok := d.symByKey[symbol]
+	label, ok := d.symByKey[input]
 	if !ok {
 		var zero StateKey
 		return zero, false
@@ -54,29 +54,29 @@ func (d valueGraphDeltaer[State, Symbol, StateKey, SymbolKey]) Delta(state State
 }
 
 // Builder constructs a DFA from (Q, Σ, δ, q₀, F) using a graph backend.
-type Builder[State key.Keyer[StateKey], Symbol key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
-	g         *graph.Graph[StateKey, SymbolKey] // internal graph built by builder
-	gLike     graphLike[State, Symbol]          // provided graphLike by user
-	states    set.Set[StateKey]                 // Q
-	alphabet  set.Set[SymbolKey]                // Σ
-	start     State                             // q₀
-	accepting set.Set[StateKey]                 // F
+type Builder[State key.Keyer[StateKey], Input key.Keyer[InputKey], StateKey comparable, InputKey comparable] struct {
+	g         *graph.Graph[StateKey, InputKey] // internal graph built by builder
+	gLike     graphLike[State, Input]          // provided graphLike by user
+	states    set.Set[StateKey]                // Q
+	alphabet  set.Set[InputKey]                // Σ
+	start     State                            // q₀
+	accepting set.Set[StateKey]                // F
 
 	stateByKey map[StateKey]State
-	symByKey   map[SymbolKey]Symbol
+	symByKey   map[InputKey]Input
 }
 
 // NewBuilder creates an empty DFA builder.
-func NewBuilder[State key.Keyer[StateKey], Symbol key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable]() *Builder[State, Symbol, StateKey, SymbolKey] {
-	return &Builder[State, Symbol, StateKey, SymbolKey]{
-		g:          graph.New[StateKey, SymbolKey](),
+func NewBuilder[State key.Keyer[StateKey], Input key.Keyer[InputKey], StateKey comparable, InputKey comparable]() *Builder[State, Input, StateKey, InputKey] {
+	return &Builder[State, Input, StateKey, InputKey]{
+		g:          graph.New[StateKey, InputKey](),
 		stateByKey: make(map[StateKey]State),
-		symByKey:   make(map[SymbolKey]Symbol),
+		symByKey:   make(map[InputKey]Input),
 	}
 }
 
 // SetStart sets q₀, the start state.
-func (b *Builder[State, Symbol, StateKey, SymbolKey]) SetStart(state State) {
+func (b *Builder[State, Input, StateKey, InputKey]) SetStart(state State) {
 	b.start = state
 	key := state.Key()
 	b.stateByKey[key] = state
@@ -84,7 +84,7 @@ func (b *Builder[State, Symbol, StateKey, SymbolKey]) SetStart(state State) {
 }
 
 // AddStates inserts states into Q.
-func (b *Builder[State, Symbol, StateKey, SymbolKey]) AddStates(states ...State) {
+func (b *Builder[State, Input, StateKey, InputKey]) AddStates(states ...State) {
 	for _, state := range states {
 		key := state.Key()
 		b.stateByKey[key] = state
@@ -92,17 +92,17 @@ func (b *Builder[State, Symbol, StateKey, SymbolKey]) AddStates(states ...State)
 	}
 }
 
-// AddAlphabet inserts symbols into Σ.
-func (b *Builder[State, Symbol, StateKey, SymbolKey]) AddAlphabet(symbols ...Symbol) {
-	for _, symbol := range symbols {
-		key := symbol.Key()
-		b.symByKey[key] = symbol
+// AddAlphabet inserts inputs into Σ.
+func (b *Builder[State, Input, StateKey, InputKey]) AddAlphabet(inputs ...Input) {
+	for _, input := range inputs {
+		key := input.Key()
+		b.symByKey[key] = input
 		b.alphabet.Add(key)
 	}
 }
 
 // AddAccepting inserts states into F.
-func (b *Builder[State, Symbol, StateKey, SymbolKey]) AddAccepting(states ...State) {
+func (b *Builder[State, Input, StateKey, InputKey]) AddAccepting(states ...State) {
 	for _, state := range states {
 		key := state.Key()
 		b.stateByKey[key] = state
@@ -113,20 +113,20 @@ func (b *Builder[State, Symbol, StateKey, SymbolKey]) AddAccepting(states ...Sta
 
 // WithGraph replaces the builder's graph for Build and shares it.
 // Preconditions: g is non-nil.
-func (b *Builder[State, Symbol, StateKey, SymbolKey]) WithGraph(g graphLike[State, Symbol]) *Builder[State, Symbol, StateKey, SymbolKey] {
+func (b *Builder[State, Input, StateKey, InputKey]) WithGraph(g graphLike[State, Input]) *Builder[State, Input, StateKey, InputKey] {
 	b.gLike = g
 	return b
 }
 
 // Transition inserts (from, a, to) into δ. It rejects nondeterminism.
-func (b *Builder[State, Symbol, StateKey, SymbolKey]) Transition(from State, symbol Symbol, to State) error {
+func (b *Builder[State, Input, StateKey, InputKey]) Transition(from State, input Input, to State) error {
 	fromKey := from.Key()
 	toKey := to.Key()
-	symKey := symbol.Key()
+	symKey := input.Key()
 
 	b.stateByKey[fromKey] = from
 	b.stateByKey[toKey] = to
-	b.symByKey[symKey] = symbol
+	b.symByKey[symKey] = input
 
 	b.states.Add(fromKey, toKey)
 	b.alphabet.Add(symKey)
@@ -139,7 +139,7 @@ func (b *Builder[State, Symbol, StateKey, SymbolKey]) Transition(from State, sym
 	if len(existing) == 1 && existing[0] == toKey {
 		return nil
 	}
-	return fmt.Errorf("dfa: transition already defined for (%v, %v)", from, symbol)
+	return fmt.Errorf("dfa: transition already defined for (%v, %v)", from, input)
 }
 
 func valuesFromKeys[K comparable, V any](keys []K, byKey map[K]V) []V {
@@ -154,7 +154,7 @@ func valuesFromKeys[K comparable, V any](keys []K, byKey map[K]V) []V {
 
 // Build returns a DFA with δ backed by the builder's graph.
 // Returns an error if the graph is missing.
-func (b *Builder[State, Symbol, StateKey, SymbolKey]) Build() (*DFA[State, Symbol, StateKey, SymbolKey], error) {
+func (b *Builder[State, Input, StateKey, InputKey]) Build() (*DFA[State, Input, StateKey, InputKey], error) {
 	if b.gLike == nil && b.g == nil {
 		return nil, errors.New("dfa builder: graph is nil")
 	}
@@ -167,16 +167,16 @@ func (b *Builder[State, Symbol, StateKey, SymbolKey]) Build() (*DFA[State, Symbo
 		}
 	}
 
-	var delta Deltaer[StateKey, SymbolKey] = graphDeltaer[StateKey, SymbolKey]{g: b.g}
+	var delta Deltaer[StateKey, InputKey] = graphDeltaer[StateKey, InputKey]{g: b.g}
 	if b.gLike != nil {
-		delta = valueGraphDeltaer[State, Symbol, StateKey, SymbolKey]{
+		delta = valueGraphDeltaer[State, Input, StateKey, InputKey]{
 			g:          b.gLike,
 			stateByKey: b.stateByKey,
 			symByKey:   b.symByKey,
 		}
 	}
 
-	return New(Config[State, Symbol, StateKey, SymbolKey]{
+	return New(Config[State, Input, StateKey, InputKey]{
 		States:    valuesFromKeys(b.states.Clone().Slice(), b.stateByKey),
 		Alphabet:  valuesFromKeys(b.alphabet.Clone().Slice(), b.symByKey),
 		Start:     b.start,
@@ -186,7 +186,7 @@ func (b *Builder[State, Symbol, StateKey, SymbolKey]) Build() (*DFA[State, Symbo
 }
 
 // BuildAtomic returns a thread-safe DFA backed by the builder's graph.
-func (b *Builder[State, Symbol, StateKey, SymbolKey]) BuildAtomic() (*AtomicDFA[State, Symbol, StateKey, SymbolKey], error) {
+func (b *Builder[State, Input, StateKey, InputKey]) BuildAtomic() (*AtomicDFA[State, Input, StateKey, InputKey], error) {
 	d, err := b.Build()
 	if err != nil {
 		return nil, err

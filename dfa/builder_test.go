@@ -11,20 +11,20 @@ type bState int
 
 func (s bState) Key() int { return int(s) }
 
-type bSymbol byte
+type bInput byte
 
-func (s bSymbol) Key() byte { return byte(s) }
+func (s bInput) Key() byte { return byte(s) }
 
-func bWord(xs ...byte) []bSymbol {
-	out := make([]bSymbol, 0, len(xs))
+func bWord(xs ...byte) []bInput {
+	out := make([]bInput, 0, len(xs))
 	for _, x := range xs {
-		out = append(out, bSymbol(x))
+		out = append(out, bInput(x))
 	}
 	return out
 }
 
 func TestTransitionDeterminism(t *testing.T) {
-	b := NewBuilder[bState, bSymbol, int, byte]()
+	b := NewBuilder[bState, bInput, int, byte]()
 	if err := b.Transition(0, 'a', 1); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestTransitionDeterminism(t *testing.T) {
 }
 
 func TestBuildAccepts(t *testing.T) {
-	b := NewBuilder[bState, bSymbol, int, byte]()
+	b := NewBuilder[bState, bInput, int, byte]()
 	b.SetStart(0)
 	b.AddAccepting(0)
 	if err := b.Transition(0, '0', 0); err != nil {
@@ -65,7 +65,7 @@ func TestBuildAccepts(t *testing.T) {
 }
 
 func TestBuildAtomic(t *testing.T) {
-	b := NewBuilder[bState, bSymbol, int, byte]()
+	b := NewBuilder[bState, bInput, int, byte]()
 	b.SetStart(0)
 	b.AddAccepting(0)
 	if err := b.Transition(0, '0', 0); err != nil {
@@ -93,12 +93,12 @@ func TestBuildAtomic(t *testing.T) {
 }
 
 func TestWithGraph(t *testing.T) {
-	g := graph.New[bState, bSymbol]()
+	g := graph.New[bState, bInput]()
 	g.AddEdge(0, 0, '0')
 	g.AddEdge(0, 1, '1')
 	g.AddEdge(1, 1, '0')
 	g.AddEdge(1, 0, '1')
-	b := NewBuilder[bState, bSymbol, int, byte]()
+	b := NewBuilder[bState, bInput, int, byte]()
 	b.SetStart(0)
 	b.AddAccepting(0)
 	b.AddAlphabet('0', '1')
@@ -116,12 +116,12 @@ func TestWithGraph(t *testing.T) {
 }
 
 func TestWithGraphAtomicGraph(t *testing.T) {
-	g := graph.NewAtomic[bState, bSymbol]()
+	g := graph.NewAtomic[bState, bInput]()
 	g.AddEdge(0, 0, '0')
 	g.AddEdge(0, 1, '1')
 	g.AddEdge(1, 1, '0')
 	g.AddEdge(1, 0, '1')
-	b := NewBuilder[bState, bSymbol, int, byte]()
+	b := NewBuilder[bState, bInput, int, byte]()
 	b.SetStart(0)
 	b.AddAccepting(0)
 	b.AddAlphabet('0', '1')
@@ -139,10 +139,10 @@ func TestWithGraphAtomicGraph(t *testing.T) {
 }
 
 func TestWithGraphRequiresStates(t *testing.T) {
-	g := graph.New[bState, bSymbol]()
+	g := graph.New[bState, bInput]()
 	g.AddEdge(0, 1, 'a')
 
-	b := NewBuilder[bState, bSymbol, int, byte]()
+	b := NewBuilder[bState, bInput, int, byte]()
 	b.WithGraph(g)
 	b.AddAlphabet('a')
 
@@ -152,10 +152,10 @@ func TestWithGraphRequiresStates(t *testing.T) {
 }
 
 func TestWithGraphRequiresAlphabet(t *testing.T) {
-	g := graph.New[bState, bSymbol]()
+	g := graph.New[bState, bInput]()
 	g.AddEdge(0, 1, 'a')
 
-	b := NewBuilder[bState, bSymbol, int, byte]()
+	b := NewBuilder[bState, bInput, int, byte]()
 	b.WithGraph(g)
 	b.SetStart(0)
 	b.AddAccepting(1)

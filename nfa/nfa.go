@@ -10,44 +10,44 @@ import (
 // δ : Q × Σ → 𝒫(Q)
 //
 // Q and Σ are represented by comparable keys.
-type Deltaer[StateKey comparable, SymbolKey comparable] interface {
-	Delta(state StateKey, symbol SymbolKey) []StateKey
+type Deltaer[StateKey comparable, InputKey comparable] interface {
+	Delta(state StateKey, input InputKey) []StateKey
 	// Epsilon yields ε-transitions from state.
 	Epsilon(state StateKey) []StateKey
 }
 
 // NFA models a nondeterministic finite automaton.
-type NFA[S key.Keyer[StateKey], A key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
-	deltaer    Deltaer[StateKey, SymbolKey] // δ, transition relation
-	states     set.Set[StateKey]            // Q, all state keys.
-	alphabet   set.Set[SymbolKey]           // Σ, all symbol keys.
-	start      S                            // q₀, start state.
-	accepting  set.Set[StateKey]            // F, accepting state keys.
+type NFA[S key.Keyer[StateKey], Input key.Keyer[InputKey], StateKey comparable, InputKey comparable] struct {
+	deltaer    Deltaer[StateKey, InputKey] // δ, transition relation
+	states     set.Set[StateKey]           // Q, all state keys.
+	alphabet   set.Set[InputKey]           // Σ, all input keys.
+	start      S                           // q₀, start state.
+	accepting  set.Set[StateKey]           // F, accepting state keys.
 	stateByKey map[StateKey]S
-	symByKey   map[SymbolKey]A
+	symByKey   map[InputKey]Input
 }
 
 // Config holds the data needed to construct an NFA (Q, Σ, δ, q₀, F).
-type Config[S key.Keyer[StateKey], A key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable] struct {
+type Config[S key.Keyer[StateKey], Input key.Keyer[InputKey], StateKey comparable, InputKey comparable] struct {
 	// States is Q, the set of all states.
 	States []S
 	// Alphabet is Σ, the input alphabet.
-	Alphabet []A
+	Alphabet []Input
 	// Start is q₀, the start state.
 	Start S
 	// Accepting is F, the accepting states.
 	Accepting []S
 	// Deltaer provides δ and ε over keys.
-	Deltaer Deltaer[StateKey, SymbolKey]
+	Deltaer Deltaer[StateKey, InputKey]
 }
 
 // New constructs an NFA from (Q, Σ, δ, q₀, F).
-func New[S key.Keyer[StateKey], A key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable](cfg Config[S, A, StateKey, SymbolKey]) *NFA[S, A, StateKey, SymbolKey] {
-	n := &NFA[S, A, StateKey, SymbolKey]{
+func New[S key.Keyer[StateKey], Input key.Keyer[InputKey], StateKey comparable, InputKey comparable](cfg Config[S, Input, StateKey, InputKey]) *NFA[S, Input, StateKey, InputKey] {
+	n := &NFA[S, Input, StateKey, InputKey]{
 		deltaer:    cfg.Deltaer,
 		start:      cfg.Start,
 		stateByKey: make(map[StateKey]S, len(cfg.States)),
-		symByKey:   make(map[SymbolKey]A, len(cfg.Alphabet)),
+		symByKey:   make(map[InputKey]Input, len(cfg.Alphabet)),
 	}
 	n.AddStates(cfg.States...)
 	n.AddAlphabet(cfg.Alphabet...)
@@ -56,8 +56,8 @@ func New[S key.Keyer[StateKey], A key.Keyer[SymbolKey], StateKey comparable, Sym
 }
 
 // NewNFA constructs an NFA from (Q, Σ, δ, q₀, F).
-func NewNFA[S key.Keyer[StateKey], A key.Keyer[SymbolKey], StateKey comparable, SymbolKey comparable](states []S, alphabet []A, start S, accepting []S, deltaer Deltaer[StateKey, SymbolKey]) *NFA[S, A, StateKey, SymbolKey] {
-	return New(Config[S, A, StateKey, SymbolKey]{
+func NewNFA[S key.Keyer[StateKey], Input key.Keyer[InputKey], StateKey comparable, InputKey comparable](states []S, alphabet []Input, start S, accepting []S, deltaer Deltaer[StateKey, InputKey]) *NFA[S, Input, StateKey, InputKey] {
+	return New(Config[S, Input, StateKey, InputKey]{
 		States:    states,
 		Alphabet:  alphabet,
 		Start:     start,
@@ -66,7 +66,7 @@ func NewNFA[S key.Keyer[StateKey], A key.Keyer[SymbolKey], StateKey comparable, 
 	})
 }
 
-func (n *NFA[S, A, StateKey, SymbolKey]) keysToStates(keys []StateKey) []S {
+func (n *NFA[S, Input, StateKey, InputKey]) keysToStates(keys []StateKey) []S {
 	if len(keys) == 0 {
 		return nil
 	}
@@ -79,8 +79,8 @@ func (n *NFA[S, A, StateKey, SymbolKey]) keysToStates(keys []StateKey) []S {
 	return out
 }
 
-// Delta applies δ : Q × Σ → P(Q) to a state on a single symbol.
-func (n *NFA[S, A, StateKey, SymbolKey]) Delta(s S, a A) []S {
+// Delta applies δ : Q × Σ → P(Q) to a state on a single input.
+func (n *NFA[S, Input, StateKey, InputKey]) Delta(s S, a Input) []S {
 	stateKey := s.Key()
 	if !n.states.Has(stateKey) {
 		return nil
@@ -99,12 +99,12 @@ func (n *NFA[S, A, StateKey, SymbolKey]) Delta(s S, a A) []S {
 }
 
 // DeltaStar applies δ repeatedly over a word. It implements δ*.
-func (n *NFA[S, A, StateKey, SymbolKey]) DeltaStar(s S, w []A) []S {
+func (n *NFA[S, Input, StateKey, InputKey]) DeltaStar(s S, w []Input) []S {
 	return n.DeltaStarSet([]S{s}, w)
 }
 
 // DeltaSet applies δ : 𝒫(Q) × Σ → 𝒫(Q) to a set of states.
-func (n *NFA[S, A, StateKey, SymbolKey]) DeltaSet(states []S, a A) []S {
+func (n *NFA[S, Input, StateKey, InputKey]) DeltaSet(states []S, a Input) []S {
 	out := set.New[StateKey]()
 	if len(states) == 0 {
 		return nil
@@ -118,7 +118,7 @@ func (n *NFA[S, A, StateKey, SymbolKey]) DeltaSet(states []S, a A) []S {
 }
 
 // DeltaStarSet applies δ* to a set of states over a word.
-func (n *NFA[S, A, StateKey, SymbolKey]) DeltaStarSet(states []S, w []A) []S {
+func (n *NFA[S, Input, StateKey, InputKey]) DeltaStarSet(states []S, w []Input) []S {
 	cur := n.EpsilonClosureSet(states)
 	for _, a := range w {
 		cur = n.DeltaSet(cur, a)
@@ -128,7 +128,7 @@ func (n *NFA[S, A, StateKey, SymbolKey]) DeltaStarSet(states []S, w []A) []S {
 }
 
 // Epsilon applies δ to a state on ε.
-func (n *NFA[S, A, StateKey, SymbolKey]) Epsilon(s S) []S {
+func (n *NFA[S, Input, StateKey, InputKey]) Epsilon(s S) []S {
 	stateKey := s.Key()
 	if !n.states.Has(stateKey) {
 		return nil
@@ -147,12 +147,12 @@ func (n *NFA[S, A, StateKey, SymbolKey]) Epsilon(s S) []S {
 }
 
 // EpsilonClosure returns ε-closure(s).
-func (n *NFA[S, A, StateKey, SymbolKey]) EpsilonClosure(s S) []S {
+func (n *NFA[S, Input, StateKey, InputKey]) EpsilonClosure(s S) []S {
 	return n.EpsilonClosureSet([]S{s})
 }
 
 // EpsilonSet applies δ to a set of states on ε.
-func (n *NFA[S, A, StateKey, SymbolKey]) EpsilonSet(states []S) []S {
+func (n *NFA[S, Input, StateKey, InputKey]) EpsilonSet(states []S) []S {
 	out := set.New[StateKey]()
 	if len(states) == 0 {
 		return nil
@@ -166,7 +166,7 @@ func (n *NFA[S, A, StateKey, SymbolKey]) EpsilonSet(states []S) []S {
 }
 
 // EpsilonClosureSet returns ε-closure(Q).
-func (n *NFA[S, A, StateKey, SymbolKey]) EpsilonClosureSet(states []S) []S {
+func (n *NFA[S, Input, StateKey, InputKey]) EpsilonClosureSet(states []S) []S {
 	if len(states) == 0 {
 		return nil
 	}
@@ -198,24 +198,24 @@ func (n *NFA[S, A, StateKey, SymbolKey]) EpsilonClosureSet(states []S) []S {
 }
 
 // Start returns q₀, the start state.
-func (n *NFA[S, A, StateKey, SymbolKey]) Start() S {
+func (n *NFA[S, Input, StateKey, InputKey]) Start() S {
 	return n.start
 }
 
 // StartSet returns {q₀}, the singleton set containing the start state.
-func (n *NFA[S, A, StateKey, SymbolKey]) StartSet() []S {
+func (n *NFA[S, Input, StateKey, InputKey]) StartSet() []S {
 	return []S{n.start}
 }
 
 // States returns Q, the set of all states.
-func (n *NFA[S, A, StateKey, SymbolKey]) States() []S {
+func (n *NFA[S, Input, StateKey, InputKey]) States() []S {
 	return n.keysToStates(n.states.Clone().Slice())
 }
 
 // Alphabet returns Σ, the input alphabet.
-func (n *NFA[S, A, StateKey, SymbolKey]) Alphabet() []A {
+func (n *NFA[S, Input, StateKey, InputKey]) Alphabet() []Input {
 	keys := n.alphabet.Clone().Slice()
-	out := make([]A, 0, len(keys))
+	out := make([]Input, 0, len(keys))
 	for _, key := range keys {
 		if sym, ok := n.symByKey[key]; ok {
 			out = append(out, sym)
@@ -225,27 +225,27 @@ func (n *NFA[S, A, StateKey, SymbolKey]) Alphabet() []A {
 }
 
 // Accepting returns F, the set of accepting states.
-func (n *NFA[S, A, StateKey, SymbolKey]) Accepting() []S {
+func (n *NFA[S, Input, StateKey, InputKey]) Accepting() []S {
 	return n.keysToStates(n.accepting.Clone().Slice())
 }
 
 // Accepts reports whether the NFA accepts the given word.
-func (n *NFA[S, A, StateKey, SymbolKey]) Accepts(w []A) bool {
+func (n *NFA[S, Input, StateKey, InputKey]) Accepts(w []Input) bool {
 	return n.IsAccepting(n.DeltaStarSet(n.StartSet(), w))
 }
 
 // HasState reports whether state ∈ Q.
-func (n *NFA[S, A, StateKey, SymbolKey]) HasState(s S) bool {
+func (n *NFA[S, Input, StateKey, InputKey]) HasState(s S) bool {
 	return n.states.Has(s.Key())
 }
 
-// HasSymbol reports whether symbol ∈ Σ.
-func (n *NFA[S, A, StateKey, SymbolKey]) HasSymbol(a A) bool {
+// HasInput reports whether input ∈ Σ.
+func (n *NFA[S, Input, StateKey, InputKey]) HasInput(a Input) bool {
 	return n.alphabet.Has(a.Key())
 }
 
 // IsAccepting reports whether any state in s is an accepting state.
-func (n *NFA[S, A, StateKey, SymbolKey]) IsAccepting(states []S) bool {
+func (n *NFA[S, Input, StateKey, InputKey]) IsAccepting(states []S) bool {
 	for _, s := range states {
 		if n.accepting.Has(s.Key()) {
 			return true
@@ -255,12 +255,12 @@ func (n *NFA[S, A, StateKey, SymbolKey]) IsAccepting(states []S) bool {
 }
 
 // SetStart sets q₀, the start state.
-func (n *NFA[S, A, StateKey, SymbolKey]) SetStart(s S) {
+func (n *NFA[S, Input, StateKey, InputKey]) SetStart(s S) {
 	n.start = s
 }
 
 // AddStates inserts states into Q.
-func (n *NFA[S, A, StateKey, SymbolKey]) AddStates(states ...S) {
+func (n *NFA[S, Input, StateKey, InputKey]) AddStates(states ...S) {
 	for _, state := range states {
 		key := state.Key()
 		n.states.Add(key)
@@ -268,17 +268,17 @@ func (n *NFA[S, A, StateKey, SymbolKey]) AddStates(states ...S) {
 	}
 }
 
-// AddAlphabet inserts symbols into Σ.
-func (n *NFA[S, A, StateKey, SymbolKey]) AddAlphabet(symbols ...A) {
-	for _, symbol := range symbols {
-		key := symbol.Key()
+// AddAlphabet inserts inputs into Σ.
+func (n *NFA[S, Input, StateKey, InputKey]) AddAlphabet(inputs ...Input) {
+	for _, input := range inputs {
+		key := input.Key()
 		n.alphabet.Add(key)
-		n.symByKey[key] = symbol
+		n.symByKey[key] = input
 	}
 }
 
 // AddAccepting inserts states into F.
-func (n *NFA[S, A, StateKey, SymbolKey]) AddAccepting(states ...S) {
+func (n *NFA[S, Input, StateKey, InputKey]) AddAccepting(states ...S) {
 	for _, state := range states {
 		key := state.Key()
 		n.accepting.Add(key)
@@ -287,7 +287,7 @@ func (n *NFA[S, A, StateKey, SymbolKey]) AddAccepting(states ...S) {
 }
 
 // RemoveAccepting removes states from F.
-func (n *NFA[S, A, StateKey, SymbolKey]) RemoveAccepting(states ...S) {
+func (n *NFA[S, Input, StateKey, InputKey]) RemoveAccepting(states ...S) {
 	keys := make([]StateKey, 0, len(states))
 	for _, state := range states {
 		keys = append(keys, state.Key())
@@ -296,6 +296,6 @@ func (n *NFA[S, A, StateKey, SymbolKey]) RemoveAccepting(states ...S) {
 }
 
 // SetDeltaer sets δ, the transition relation.
-func (n *NFA[S, A, StateKey, SymbolKey]) SetDeltaer(deltaer Deltaer[StateKey, SymbolKey]) {
+func (n *NFA[S, Input, StateKey, InputKey]) SetDeltaer(deltaer Deltaer[StateKey, InputKey]) {
 	n.deltaer = deltaer
 }

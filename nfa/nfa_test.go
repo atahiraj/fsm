@@ -6,9 +6,9 @@ type nstate int
 
 func (s nstate) Key() int { return int(s) }
 
-type nsymbol byte
+type ninput byte
 
-func (s nsymbol) Key() byte { return byte(s) }
+func (s ninput) Key() byte { return byte(s) }
 
 const (
 	s0 nstate = iota
@@ -18,16 +18,16 @@ const (
 )
 
 type deltaTable struct {
-	bySym map[nstate]map[nsymbol][]nstate
+	bySym map[nstate]map[ninput][]nstate
 	eps   map[nstate][]nstate
 }
 
-func (t deltaTable) Delta(state int, symbol byte) []int {
+func (t deltaTable) Delta(state int, input byte) []int {
 	row := t.bySym[nstate(state)]
 	if row == nil {
 		return nil
 	}
-	next := row[nsymbol(symbol)]
+	next := row[ninput(input)]
 	out := make([]int, 0, len(next))
 	for _, s := range next {
 		out = append(out, s.Key())
@@ -44,17 +44,17 @@ func (t deltaTable) Epsilon(state int) []int {
 	return out
 }
 
-func nword(xs ...byte) []nsymbol {
-	out := make([]nsymbol, 0, len(xs))
+func nword(xs ...byte) []ninput {
+	out := make([]ninput, 0, len(xs))
 	for _, x := range xs {
-		out = append(out, nsymbol(x))
+		out = append(out, ninput(x))
 	}
 	return out
 }
 
 func TestAcceptsWithEpsilon(t *testing.T) {
 	table := deltaTable{
-		bySym: map[nstate]map[nsymbol][]nstate{
+		bySym: map[nstate]map[ninput][]nstate{
 			s1: {
 				'a': {s1, s2},
 				'b': {s2},
@@ -71,9 +71,9 @@ func TestAcceptsWithEpsilon(t *testing.T) {
 			s0: {s1},
 		},
 	}
-	n := New(Config[nstate, nsymbol, int, byte]{
+	n := New(Config[nstate, ninput, int, byte]{
 		States:    []nstate{s0, s1, s2, s3},
-		Alphabet:  []nsymbol{'a', 'b'},
+		Alphabet:  []ninput{'a', 'b'},
 		Start:     s0,
 		Accepting: []nstate{s2},
 		Deltaer:   table,
@@ -91,7 +91,7 @@ func TestAcceptsWithEpsilon(t *testing.T) {
 
 func TestDeltaStarSet(t *testing.T) {
 	table := deltaTable{
-		bySym: map[nstate]map[nsymbol][]nstate{
+		bySym: map[nstate]map[ninput][]nstate{
 			s0: {
 				'a': {s0, s1},
 			},
@@ -103,9 +103,9 @@ func TestDeltaStarSet(t *testing.T) {
 			s0: {s1},
 		},
 	}
-	n := New(Config[nstate, nsymbol, int, byte]{
+	n := New(Config[nstate, ninput, int, byte]{
 		States:    []nstate{s0, s1, s2},
-		Alphabet:  []nsymbol{'a'},
+		Alphabet:  []ninput{'a'},
 		Start:     s0,
 		Accepting: []nstate{s2},
 		Deltaer:   table,

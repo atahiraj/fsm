@@ -4,11 +4,11 @@ import "context"
 
 // Stepper is the minimal contract required by Runner.
 type Stepper[I any] interface {
-	Step(symbol I)
+	Step(input I)
 }
 
 // Event is a transport envelope delivered to Stepper.
-// Event.Event carries the FSM input symbol.
+// Event.Event carries the FSM input input.
 type Event[I any] struct {
 	Event I
 }

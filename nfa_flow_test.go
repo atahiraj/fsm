@@ -12,20 +12,20 @@ type nfaState int
 
 func (s nfaState) Key() int { return int(s) }
 
-type nfaSymbol string
+type nfaInput string
 
-func (s nfaSymbol) Key() string { return string(s) }
+func (s nfaInput) Key() string { return string(s) }
 
-type nfaByteSymbol byte
+type nfaByteInput byte
 
-func (s nfaByteSymbol) Key() byte { return byte(s) }
+func (s nfaByteInput) Key() byte { return byte(s) }
 
 type nfaGraph struct {
-	sym map[nfaState]map[nfaSymbol][]nfaState
+	sym map[nfaState]map[nfaInput][]nfaState
 	eps map[nfaState][]nfaState
 }
 
-func (g nfaGraph) Delta(from nfaState, sym nfaSymbol) []nfaState {
+func (g nfaGraph) Delta(from nfaState, sym nfaInput) []nfaState {
 	if m, ok := g.sym[from]; ok {
 		return m[sym]
 	}
@@ -59,7 +59,7 @@ func (o *nfaRecordingTransitionHooks[S, E]) OnTransition(_ S, _ S, _ E) {
 }
 
 func TestNFABuilderBuildNFAAccepts(t *testing.T) {
-	b := NFA[nfaState, nfaSymbol, int, string]()
+	b := NFA[nfaState, nfaInput, int, string]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1).
@@ -69,19 +69,19 @@ func TestNFABuilderBuildNFAAccepts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildNFA() error = %v", err)
 	}
-	if !n.Accepts([]nfaSymbol{"a"}) {
+	if !n.Accepts([]nfaInput{"a"}) {
 		t.Fatalf("nfa should accept [a]")
 	}
 }
 
 func TestNFABuilderWithGraphOverride(t *testing.T) {
 	g := nfaGraph{
-		sym: map[nfaState]map[nfaSymbol][]nfaState{
+		sym: map[nfaState]map[nfaInput][]nfaState{
 			0: {"a": {1}},
 		},
 		eps: map[nfaState][]nfaState{},
 	}
-	b := NFA[nfaState, nfaSymbol, int, string]()
+	b := NFA[nfaState, nfaInput, int, string]()
 	b.WithGraph(g).
 		WithStart(0).
 		WithAccepting(1).
@@ -92,22 +92,22 @@ func TestNFABuilderWithGraphOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildNFA() error = %v", err)
 	}
-	if !n.Accepts([]nfaSymbol{"a"}) {
+	if !n.Accepts([]nfaInput{"a"}) {
 		t.Fatalf("nfa should accept [a] with graph override")
 	}
 }
 
 func TestNFABuilderWithNFAOverride(t *testing.T) {
 	delta := &nfaCountingDeltaer{}
-	override := nfapkg.New(nfapkg.Config[nfaState, nfaSymbol, int, string]{
+	override := nfapkg.New(nfapkg.Config[nfaState, nfaInput, int, string]{
 		States:    []nfaState{0, 1},
-		Alphabet:  []nfaSymbol{"a"},
+		Alphabet:  []nfaInput{"a"},
 		Start:     0,
 		Accepting: []nfaState{1},
 		Deltaer:   delta,
 	})
 
-	b := NFA[nfaState, nfaSymbol, int, string]().WithNFA(override)
+	b := NFA[nfaState, nfaInput, int, string]().WithNFA(override)
 	n, err := b.BuildNFA()
 	if err != nil {
 		t.Fatalf("BuildNFA() error = %v", err)
@@ -126,7 +126,7 @@ func TestNFABuilderWithNFAOverride(t *testing.T) {
 }
 
 func TestNFABuilderBuildAtomic(t *testing.T) {
-	b := NFA[nfaState, nfaSymbol, int, string]()
+	b := NFA[nfaState, nfaInput, int, string]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1)
@@ -135,29 +135,29 @@ func TestNFABuilderBuildAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildAtomicNFA() error = %v", err)
 	}
-	if !a.Accepts([]nfaSymbol{"a"}) {
+	if !a.Accepts([]nfaInput{"a"}) {
 		t.Fatalf("atomic nfa should accept [a]")
 	}
 }
 
 func TestNFABuilderBuildEngineTransitionHooksOrder(t *testing.T) {
-	b := NFA[nfaState, nfaSymbol, int, string]()
+	b := NFA[nfaState, nfaInput, int, string]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1).
 		WithEpsilon(0, 1)
 
 	var order []string
-	b.WithOnTransitionAny(func(from []nfaState, to []nfaState, e nfaSymbol) {
+	b.WithOnTransitionAny(func(from []nfaState, to []nfaState, e nfaInput) {
 		order = append(order, "step:any")
 	})
-	b.WithOnTransition([]nfaState{0, 1}, []nfaState{1}, func(e nfaSymbol) {
+	b.WithOnTransition([]nfaState{0, 1}, []nfaState{1}, func(e nfaInput) {
 		order = append(order, "step:[0 1]->[1]")
 	})
-	b.WithOnExit([]nfaState{0, 1}, func(e nfaSymbol) {
+	b.WithOnExit([]nfaState{0, 1}, func(e nfaInput) {
 		order = append(order, "exit:[0 1]")
 	})
-	b.WithOnEnter([]nfaState{1}, func(e nfaSymbol) {
+	b.WithOnEnter([]nfaState{1}, func(e nfaInput) {
 		order = append(order, "enter:[1]")
 	})
 
@@ -178,7 +178,7 @@ func TestNFABuilderBuildEngineTransitionHooksOrder(t *testing.T) {
 }
 
 func TestNFABuilderEnterExitCallbacksIgnoreSelfTransition(t *testing.T) {
-	b := NFA[nfaState, nfaSymbol, int, string]()
+	b := NFA[nfaState, nfaInput, int, string]()
 	b.WithStart(0).
 		WithAccepting(0).
 		WithTransition(0, "a", 0)
@@ -186,10 +186,10 @@ func TestNFABuilderEnterExitCallbacksIgnoreSelfTransition(t *testing.T) {
 	var enterCalls int
 	var exitCalls int
 
-	b.WithOnEnter([]nfaState{0}, func(e nfaSymbol) {
+	b.WithOnEnter([]nfaState{0}, func(e nfaInput) {
 		enterCalls++
 	})
-	b.WithOnExit([]nfaState{0}, func(e nfaSymbol) {
+	b.WithOnExit([]nfaState{0}, func(e nfaInput) {
 		exitCalls++
 	})
 
@@ -208,7 +208,7 @@ func TestNFABuilderEnterExitCallbacksIgnoreSelfTransition(t *testing.T) {
 }
 
 func TestNFABuilderEnterExitCallbacksIncludeSelfTransitionWhenEnabled(t *testing.T) {
-	b := NFA[nfaState, nfaSymbol, int, string]()
+	b := NFA[nfaState, nfaInput, int, string]()
 	b.WithStart(0).
 		WithAccepting(0).
 		WithTransition(0, "a", 0).
@@ -217,10 +217,10 @@ func TestNFABuilderEnterExitCallbacksIncludeSelfTransitionWhenEnabled(t *testing
 	var enterCalls int
 	var exitCalls int
 
-	b.WithOnEnter([]nfaState{0}, func(e nfaSymbol) {
+	b.WithOnEnter([]nfaState{0}, func(e nfaInput) {
 		enterCalls++
 	})
-	b.WithOnExit([]nfaState{0}, func(e nfaSymbol) {
+	b.WithOnExit([]nfaState{0}, func(e nfaInput) {
 		exitCalls++
 	})
 
@@ -239,22 +239,22 @@ func TestNFABuilderEnterExitCallbacksIncludeSelfTransitionWhenEnabled(t *testing
 }
 
 func TestNFABuilderStateCallbacks(t *testing.T) {
-	b := NFA[nfaState, nfaSymbol, int, string]()
+	b := NFA[nfaState, nfaInput, int, string]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1)
 
 	var got []string
-	b.WithOnExitState(0, func(e nfaSymbol) {
+	b.WithOnExitState(0, func(e nfaInput) {
 		got = append(got, "exit:0")
 	})
-	b.WithOnExitState(2, func(e nfaSymbol) {
+	b.WithOnExitState(2, func(e nfaInput) {
 		got = append(got, "exit:2")
 	})
-	b.WithOnEnterState(1, func(e nfaSymbol) {
+	b.WithOnEnterState(1, func(e nfaInput) {
 		got = append(got, "enter:1")
 	})
-	b.WithOnEnterState(3, func(e nfaSymbol) {
+	b.WithOnEnterState(3, func(e nfaInput) {
 		got = append(got, "enter:3")
 	})
 
@@ -276,12 +276,12 @@ func TestNFABuilderStateCallbacks(t *testing.T) {
 }
 
 func TestNFABuilderWithTransitionHooksOverride(t *testing.T) {
-	b := NFA[nfaState, nfaSymbol, int, string]()
+	b := NFA[nfaState, nfaInput, int, string]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1)
 
-	hooks := &nfaRecordingTransitionHooks[[]nfaState, nfaSymbol]{}
+	hooks := &nfaRecordingTransitionHooks[[]nfaState, nfaInput]{}
 	b.WithTransitionHooks(hooks)
 
 	e, err := b.BuildEngine()
@@ -295,13 +295,13 @@ func TestNFABuilderWithTransitionHooksOverride(t *testing.T) {
 }
 
 func TestNFABuilderBuildAtomicEngine(t *testing.T) {
-	b := NFA[nfaState, nfaSymbol, int, string]()
+	b := NFA[nfaState, nfaInput, int, string]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1)
 
 	var calls int
-	b.WithOnEnter([]nfaState{1}, func(e nfaSymbol) {
+	b.WithOnEnter([]nfaState{1}, func(e nfaInput) {
 		calls++
 	})
 
@@ -316,13 +316,13 @@ func TestNFABuilderBuildAtomicEngine(t *testing.T) {
 }
 
 func TestNFABuilderBuildRunner(t *testing.T) {
-	b := NFA[nfaState, nfaSymbol, int, string]()
+	b := NFA[nfaState, nfaInput, int, string]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1)
 
 	var calls int
-	b.WithOnTransitionAny(func(from []nfaState, to []nfaState, e nfaSymbol) {
+	b.WithOnTransitionAny(func(from []nfaState, to []nfaState, e nfaInput) {
 		calls++
 	})
 
@@ -335,7 +335,7 @@ func TestNFABuilderBuildRunner(t *testing.T) {
 	go func() { done <- r.Run(context.Background()) }()
 
 	events := r.Events()
-	events <- runner.Event[nfaSymbol]{Event: "a"}
+	events <- runner.Event[nfaInput]{Event: "a"}
 	close(events)
 
 	if err := <-done; err != nil {
@@ -347,7 +347,7 @@ func TestNFABuilderBuildRunner(t *testing.T) {
 }
 
 func TestNFABuilderBuildEngineErrorMissingExecutor(t *testing.T) {
-	b := NFA[nfaState, nfaSymbol, int, string]()
+	b := NFA[nfaState, nfaInput, int, string]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1).
@@ -362,7 +362,7 @@ func TestNFABuilderBuildEngineErrorMissingExecutor(t *testing.T) {
 }
 
 func TestFacadeNFABuilder(t *testing.T) {
-	b := NewNFABuilder[nfaState, nfaByteSymbol, int, byte]()
+	b := NewNFABuilder[nfaState, nfaByteInput, int, byte]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, 'a', 1)
@@ -371,7 +371,7 @@ func TestFacadeNFABuilder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildNFA() error = %v", err)
 	}
-	if !n.Accepts([]nfaByteSymbol{'a'}) {
+	if !n.Accepts([]nfaByteInput{'a'}) {
 		t.Fatalf("expected acceptance")
 	}
 }

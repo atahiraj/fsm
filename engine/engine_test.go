@@ -10,8 +10,8 @@ type testDFALike struct {
 
 func (d testDFALike) Start() int { return d.start }
 
-func (d testDFALike) Delta(state int, symbol byte) (int, bool) {
-	next, ok := d.transitions[[2]int{state, int(symbol)}]
+func (d testDFALike) Delta(state int, input byte) (int, bool) {
+	next, ok := d.transitions[[2]int{state, int(input)}]
 	return next, ok
 }
 

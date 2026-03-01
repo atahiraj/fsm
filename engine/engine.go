@@ -2,7 +2,7 @@ package engine
 
 // FSM is the minimal contract a machine must satisfy.
 // S = configuration (DFA: a state; NFA: a set of states)
-// I = input symbol.
+// I = input input.
 type FSM[S any, I any] interface {
 	Start() S
 	// Step returns the next configuration and whether a transition exists.
@@ -37,34 +37,34 @@ func (e *Engine[S, I]) Reset() {
 func (e *Engine[S, I]) Cur() S          { return e.cur }
 func (e *Engine[S, I]) Accepting() bool { return e.fsm.IsAccepting(e.cur) }
 
-// Step attempts to advance the machine by one symbol.
+// Step attempts to advance the machine by one input.
 // It is a no-op when no transition exists.
-func (e *Engine[S, I]) Step(symbol I) {
-	_ = e.TryStep(symbol)
+func (e *Engine[S, I]) Step(input I) {
+	_ = e.TryStep(input)
 }
 
-// TryStep advances the machine by one symbol and reports whether a transition existed.
+// TryStep advances the machine by one input and reports whether a transition existed.
 // The hooks are notified only when a transition exists.
-func (e *Engine[S, I]) TryStep(symbol I) bool {
-	to, ok := e.fsm.Step(e.cur, symbol)
+func (e *Engine[S, I]) TryStep(input I) bool {
+	to, ok := e.fsm.Step(e.cur, input)
 	if !ok {
 		return false
 	}
-	e.hooks.OnTransition(e.cur, to, symbol)
+	e.hooks.OnTransition(e.cur, to, input)
 	e.cur = to
 	return true
 }
 
-// CanStep reports whether a transition exists for the current configuration and symbol.
+// CanStep reports whether a transition exists for the current configuration and input.
 // It does not update engine state or notify the hooks.
-func (e *Engine[S, I]) CanStep(symbol I) bool {
-	_, ok := e.PeekStep(symbol)
+func (e *Engine[S, I]) CanStep(input I) bool {
+	_, ok := e.PeekStep(input)
 	return ok
 }
 
-// PeekStep reports the next configuration for a symbol without mutating engine state.
+// PeekStep reports the next configuration for a input without mutating engine state.
 // It does not update engine state or notify the hooks.
-func (e *Engine[S, I]) PeekStep(symbol I) (S, bool) {
-	next, ok := e.fsm.Step(e.cur, symbol)
+func (e *Engine[S, I]) PeekStep(input I) (S, bool) {
+	next, ok := e.fsm.Step(e.cur, input)
 	return next, ok
 }

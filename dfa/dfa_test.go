@@ -6,9 +6,9 @@ type state int
 
 func (s state) Key() int { return int(s) }
 
-type symbol byte
+type input byte
 
-func (s symbol) Key() byte { return byte(s) }
+func (s input) Key() byte { return byte(s) }
 
 const (
 	even state = iota
@@ -16,33 +16,33 @@ const (
 	outside
 )
 
-type deltaTable map[state]map[symbol]state
+type deltaTable map[state]map[input]state
 
 func (t deltaTable) Delta(s int, a byte) (int, bool) {
 	row := t[state(s)]
 	if row == nil {
 		return 0, false
 	}
-	next, ok := row[symbol(a)]
+	next, ok := row[input(a)]
 	return next.Key(), ok
 }
 
-func word(xs ...byte) []symbol {
-	out := make([]symbol, 0, len(xs))
+func word(xs ...byte) []input {
+	out := make([]input, 0, len(xs))
 	for _, x := range xs {
-		out = append(out, symbol(x))
+		out = append(out, input(x))
 	}
 	return out
 }
 
-func evenOnesDFA() *DFA[state, symbol, int, byte] {
+func evenOnesDFA() *DFA[state, input, int, byte] {
 	table := deltaTable{
 		even: {'0': even, '1': odd},
 		odd:  {'0': odd, '1': even},
 	}
-	return New(Config[state, symbol, int, byte]{
+	return New(Config[state, input, int, byte]{
 		States:    []state{even, odd},
-		Alphabet:  []symbol{'0', '1'},
+		Alphabet:  []input{'0', '1'},
 		Start:     even,
 		Accepting: []state{even},
 		Deltaer:   table,
@@ -53,7 +53,7 @@ func TestAccepts(t *testing.T) {
 	d := evenOnesDFA()
 	cases := []struct {
 		name string
-		word []symbol
+		word []input
 		want bool
 	}{
 		{name: "empty", word: nil, want: true},
@@ -73,9 +73,9 @@ func TestDeltaRejectsUnknownState(t *testing.T) {
 	table := deltaTable{
 		even: {'0': outside},
 	}
-	d := New(Config[state, symbol, int, byte]{
+	d := New(Config[state, input, int, byte]{
 		States:    []state{even, odd},
-		Alphabet:  []symbol{'0'},
+		Alphabet:  []input{'0'},
 		Start:     even,
 		Accepting: []state{even},
 		Deltaer:   table,
@@ -89,9 +89,9 @@ func TestDeltaStarMissingTransition(t *testing.T) {
 	table := deltaTable{
 		even: {'0': even},
 	}
-	d := New(Config[state, symbol, int, byte]{
+	d := New(Config[state, input, int, byte]{
 		States:    []state{even},
-		Alphabet:  []symbol{'0', '1'},
+		Alphabet:  []input{'0', '1'},
 		Start:     even,
 		Accepting: []state{even},
 		Deltaer:   table,

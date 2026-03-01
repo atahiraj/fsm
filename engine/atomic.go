@@ -36,30 +36,30 @@ func (a *AtomicEngine[S, I]) Accepting() bool {
 	return a.e.Accepting()
 }
 
-// Step attempts to advance the machine by one symbol.
-func (a *AtomicEngine[S, I]) Step(symbol I) {
+// Step attempts to advance the machine by one input.
+func (a *AtomicEngine[S, I]) Step(input I) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.e.Step(symbol)
+	a.e.Step(input)
 }
 
-// TryStep advances the machine by one symbol and reports whether a transition existed.
-func (a *AtomicEngine[S, I]) TryStep(symbol I) bool {
+// TryStep advances the machine by one input and reports whether a transition existed.
+func (a *AtomicEngine[S, I]) TryStep(input I) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.e.TryStep(symbol)
+	return a.e.TryStep(input)
 }
 
-// CanStep reports whether a transition exists for the current configuration and symbol.
-func (a *AtomicEngine[S, I]) CanStep(symbol I) bool {
+// CanStep reports whether a transition exists for the current configuration and input.
+func (a *AtomicEngine[S, I]) CanStep(input I) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.e.CanStep(symbol)
+	return a.e.CanStep(input)
 }
 
-// PeekStep reports the next configuration for a symbol without mutating engine state.
-func (a *AtomicEngine[S, I]) PeekStep(symbol I) (S, bool) {
+// PeekStep reports the next configuration for a input without mutating engine state.
+func (a *AtomicEngine[S, I]) PeekStep(input I) (S, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.e.PeekStep(symbol)
+	return a.e.PeekStep(input)
 }

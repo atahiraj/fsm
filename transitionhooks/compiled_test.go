@@ -6,17 +6,17 @@ type compiledState struct {
 	key string
 }
 
-type compiledSymbol string
+type compiledInput string
 
 type recordingCompiledExecutor struct {
 	calls int
 }
 
 func (e *recordingCompiledExecutor) Execute(
-	f func(from compiledState, to compiledState, sym compiledSymbol),
+	f func(from compiledState, to compiledState, sym compiledInput),
 	from compiledState,
 	to compiledState,
-	sym compiledSymbol,
+	sym compiledInput,
 ) {
 	e.calls++
 	f(from, to, sym)
@@ -24,28 +24,28 @@ func (e *recordingCompiledExecutor) Execute(
 
 func TestNewCompiledDispatchesMatchingBucketsInOrder(t *testing.T) {
 	var got []string
-	hooks := NewCompiled[compiledState, compiledSymbol, string](
-		DefaultExecutor[compiledState, compiledSymbol]{},
+	hooks := NewCompiled[compiledState, compiledInput, string](
+		DefaultExecutor[compiledState, compiledInput]{},
 		func(s compiledState) string { return s.key },
-		Group[compiledState, compiledSymbol, string]{
-			Registrations: []Registration[compiledState, compiledSymbol, string]{
+		Group[compiledState, compiledInput, string]{
+			Registrations: []Registration[compiledState, compiledInput, string]{
 				{
 					Mode: MatchAny,
-					Callback: func(from compiledState, to compiledState, sym compiledSymbol) {
+					Callback: func(from compiledState, to compiledState, sym compiledInput) {
 						got = append(got, "any")
 					},
 				},
 				{
 					Mode:    MatchFromKey,
 					FromKey: "A",
-					Callback: func(from compiledState, to compiledState, sym compiledSymbol) {
+					Callback: func(from compiledState, to compiledState, sym compiledInput) {
 						got = append(got, "from:A")
 					},
 				},
 				{
 					Mode:  MatchToKey,
 					ToKey: "B",
-					Callback: func(from compiledState, to compiledState, sym compiledSymbol) {
+					Callback: func(from compiledState, to compiledState, sym compiledInput) {
 						got = append(got, "to:B")
 					},
 				},
@@ -53,16 +53,16 @@ func TestNewCompiledDispatchesMatchingBucketsInOrder(t *testing.T) {
 					Mode:    MatchFromToKey,
 					FromKey: "A",
 					ToKey:   "B",
-					Callback: func(from compiledState, to compiledState, sym compiledSymbol) {
+					Callback: func(from compiledState, to compiledState, sym compiledInput) {
 						got = append(got, "A->B")
 					},
 				},
 				{
 					Mode: MatchPredicate,
-					Predicate: func(from compiledState, to compiledState, sym compiledSymbol) bool {
+					Predicate: func(from compiledState, to compiledState, sym compiledInput) bool {
 						return sym == "go"
 					},
-					Callback: func(from compiledState, to compiledState, sym compiledSymbol) {
+					Callback: func(from compiledState, to compiledState, sym compiledInput) {
 						got = append(got, "predicate:go")
 					},
 				},
@@ -85,16 +85,16 @@ func TestNewCompiledDispatchesMatchingBucketsInOrder(t *testing.T) {
 
 func TestNewCompiledPreservesRegistrationOrderWithinBucket(t *testing.T) {
 	var got []string
-	hooks := NewCompiled[compiledState, compiledSymbol, string](
-		DefaultExecutor[compiledState, compiledSymbol]{},
+	hooks := NewCompiled[compiledState, compiledInput, string](
+		DefaultExecutor[compiledState, compiledInput]{},
 		func(s compiledState) string { return s.key },
-		Group[compiledState, compiledSymbol, string]{
-			Registrations: []Registration[compiledState, compiledSymbol, string]{
+		Group[compiledState, compiledInput, string]{
+			Registrations: []Registration[compiledState, compiledInput, string]{
 				{
 					Mode:    MatchFromToKey,
 					FromKey: "A",
 					ToKey:   "B",
-					Callback: func(from compiledState, to compiledState, sym compiledSymbol) {
+					Callback: func(from compiledState, to compiledState, sym compiledInput) {
 						got = append(got, "first")
 					},
 				},
@@ -102,7 +102,7 @@ func TestNewCompiledPreservesRegistrationOrderWithinBucket(t *testing.T) {
 					Mode:    MatchFromToKey,
 					FromKey: "A",
 					ToKey:   "B",
-					Callback: func(from compiledState, to compiledState, sym compiledSymbol) {
+					Callback: func(from compiledState, to compiledState, sym compiledInput) {
 						got = append(got, "second")
 					},
 				},
@@ -125,17 +125,17 @@ func TestNewCompiledPreservesRegistrationOrderWithinBucket(t *testing.T) {
 
 func TestNewCompiledGroupGuard(t *testing.T) {
 	var got []string
-	hooks := NewCompiled[compiledState, compiledSymbol, string](
-		DefaultExecutor[compiledState, compiledSymbol]{},
+	hooks := NewCompiled[compiledState, compiledInput, string](
+		DefaultExecutor[compiledState, compiledInput]{},
 		func(s compiledState) string { return s.key },
-		Group[compiledState, compiledSymbol, string]{
+		Group[compiledState, compiledInput, string]{
 			Guard: func(fromKey string, toKey string) bool {
 				return fromKey != toKey
 			},
-			Registrations: []Registration[compiledState, compiledSymbol, string]{
+			Registrations: []Registration[compiledState, compiledInput, string]{
 				{
 					Mode: MatchAny,
-					Callback: func(from compiledState, to compiledState, sym compiledSymbol) {
+					Callback: func(from compiledState, to compiledState, sym compiledInput) {
 						got = append(got, "guarded")
 					},
 				},
@@ -157,29 +157,29 @@ func TestNewCompiledGroupGuard(t *testing.T) {
 
 func TestNewCompiledExecutorCalledOnlyForMatchedCallbacks(t *testing.T) {
 	exec := &recordingCompiledExecutor{}
-	hooks := NewCompiled[compiledState, compiledSymbol, string](
+	hooks := NewCompiled[compiledState, compiledInput, string](
 		exec,
 		func(s compiledState) string { return s.key },
-		Group[compiledState, compiledSymbol, string]{
-			Registrations: []Registration[compiledState, compiledSymbol, string]{
+		Group[compiledState, compiledInput, string]{
+			Registrations: []Registration[compiledState, compiledInput, string]{
 				{
 					Mode: MatchAny,
-					Callback: func(from compiledState, to compiledState, sym compiledSymbol) {
+					Callback: func(from compiledState, to compiledState, sym compiledInput) {
 					},
 				},
 				{
 					Mode:    MatchFromToKey,
 					FromKey: "A",
 					ToKey:   "B",
-					Callback: func(from compiledState, to compiledState, sym compiledSymbol) {
+					Callback: func(from compiledState, to compiledState, sym compiledInput) {
 					},
 				},
 				{
 					Mode: MatchPredicate,
-					Predicate: func(from compiledState, to compiledState, sym compiledSymbol) bool {
+					Predicate: func(from compiledState, to compiledState, sym compiledInput) bool {
 						return false
 					},
-					Callback: func(from compiledState, to compiledState, sym compiledSymbol) {
+					Callback: func(from compiledState, to compiledState, sym compiledInput) {
 					},
 				},
 			},

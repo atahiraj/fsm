@@ -9,16 +9,16 @@ type bState int
 
 func (s bState) Key() int { return int(s) }
 
-type bSymbol byte
+type bInput byte
 
-func (s bSymbol) Key() byte { return byte(s) }
+func (s bInput) Key() byte { return byte(s) }
 
 type bGraph struct {
-	bySym map[bState]map[bSymbol][]bState
+	bySym map[bState]map[bInput][]bState
 	eps   map[bState][]bState
 }
 
-func (g bGraph) Delta(from bState, sym bSymbol) []bState {
+func (g bGraph) Delta(from bState, sym bInput) []bState {
 	if row, ok := g.bySym[from]; ok {
 		return row[sym]
 	}
@@ -29,16 +29,16 @@ func (g bGraph) Epsilon(from bState) []bState {
 	return g.eps[from]
 }
 
-func bword(xs ...byte) []bSymbol {
-	out := make([]bSymbol, 0, len(xs))
+func bword(xs ...byte) []bInput {
+	out := make([]bInput, 0, len(xs))
 	for _, x := range xs {
-		out = append(out, bSymbol(x))
+		out = append(out, bInput(x))
 	}
 	return out
 }
 
 func TestBuildAtomic(t *testing.T) {
-	b := NewBuilder[bState, bSymbol, int, byte]()
+	b := NewBuilder[bState, bInput, int, byte]()
 	b.SetStart(0)
 	b.AddAccepting(2)
 	b.Epsilon(0, 1)
@@ -58,14 +58,14 @@ func TestBuildAtomic(t *testing.T) {
 
 func TestWithGraphAtomicGraph(t *testing.T) {
 	g := bGraph{
-		bySym: map[bState]map[bSymbol][]bState{
+		bySym: map[bState]map[bInput][]bState{
 			1: {'a': {2}},
 		},
 		eps: map[bState][]bState{
 			0: {1},
 		},
 	}
-	b := NewBuilder[bState, bSymbol, int, byte]()
+	b := NewBuilder[bState, bInput, int, byte]()
 	b.SetStart(0)
 	b.AddAccepting(2)
 	b.AddStates(1)
@@ -85,13 +85,13 @@ func TestWithGraphAtomicGraph(t *testing.T) {
 
 func TestWithGraphRequiresStates(t *testing.T) {
 	g := bGraph{
-		bySym: map[bState]map[bSymbol][]bState{
+		bySym: map[bState]map[bInput][]bState{
 			0: {'a': {1}},
 		},
 		eps: map[bState][]bState{},
 	}
 
-	b := NewBuilder[bState, bSymbol, int, byte]()
+	b := NewBuilder[bState, bInput, int, byte]()
 	b.WithGraph(g)
 	b.AddAlphabet('a')
 
@@ -102,13 +102,13 @@ func TestWithGraphRequiresStates(t *testing.T) {
 
 func TestWithGraphRequiresAlphabet(t *testing.T) {
 	g := bGraph{
-		bySym: map[bState]map[bSymbol][]bState{
+		bySym: map[bState]map[bInput][]bState{
 			0: {'a': {1}},
 		},
 		eps: map[bState][]bState{},
 	}
 
-	b := NewBuilder[bState, bSymbol, int, byte]()
+	b := NewBuilder[bState, bInput, int, byte]()
 	b.WithGraph(g)
 	b.SetStart(0)
 	b.AddAccepting(1)
