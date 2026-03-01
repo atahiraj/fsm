@@ -48,27 +48,27 @@ func (d *dfaCountingDeltaer) Delta(s int, sym string) (int, bool) {
 	return 0, true
 }
 
-type dfaRecordingObserver[S any, E any, SP any, EP any] struct {
+type dfaRecordingTransitionHooks[S any, E any] struct {
 	calls int
 }
 
-func (o *dfaRecordingObserver[S, E, SP, EP]) OnStep(_ S, _ SP, _ S, _ E, _ EP) {
+func (o *dfaRecordingTransitionHooks[S, E]) OnTransition(_ S, _ S, _ E) {
 	o.calls++
 }
 
 func TestDefaultExecutor(t *testing.T) {
-	exec := DefaultExecutor[dfaState, dfaSymbol, struct{}, struct{}]{}
+	exec := DefaultExecutor[dfaState, dfaSymbol]{}
 	called := false
-	exec.Execute(func(from dfaState, _ struct{}, to dfaState, _ dfaSymbol, _ struct{}) {
+	exec.Execute(func(from dfaState, to dfaState, e dfaSymbol) {
 		called = true
-	}, 1, struct{}{}, 2, "a", struct{}{})
+	}, 1, 2, "a")
 	if !called {
 		t.Fatalf("callback not executed")
 	}
 }
 
 func TestDFABuilderBuildDFAAccepts(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol]()
 	b.WithStart(0).
 		WithAccepting(2).
 		WithTransition(0, "a", 1).
@@ -94,7 +94,7 @@ func TestDFABuilderWithGraphOverride(t *testing.T) {
 	g := dfaGraph{next: map[dfaState]map[dfaSymbol]dfaState{
 		0: {"a": 1},
 	}}
-	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol]()
 	b.WithGraph(g).
 		WithStart(0).
 		WithAccepting(1).
@@ -120,7 +120,7 @@ func TestDFABuilderWithDFAOverride(t *testing.T) {
 		Deltaer:   delta,
 	})
 
-	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]().WithDFA(override)
+	b := DFA[dfaState, dfaSymbol]().WithDFA(override)
 	d, err := b.BuildDFA()
 	if err != nil {
 		t.Fatalf("BuildDFA() error = %v", err)
@@ -132,14 +132,14 @@ func TestDFABuilderWithDFAOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildEngine() error = %v", err)
 	}
-	e.Step("a", struct{}{})
+	e.Step("a")
 	if delta.calls == 0 {
 		t.Fatalf("override deltaer was not called")
 	}
 }
 
 func TestDFABuilderBuildAtomic(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1)
@@ -153,8 +153,8 @@ func TestDFABuilderBuildAtomic(t *testing.T) {
 	}
 }
 
-func TestDFABuilderBuildEngineObserverOrder(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
+func TestDFABuilderBuildEngineTransitionHooksOrder(t *testing.T) {
+	b := DFA[dfaState, dfaSymbol]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1).
@@ -162,22 +162,22 @@ func TestDFABuilderBuildEngineObserverOrder(t *testing.T) {
 		WithTransition(1, "b", 0)
 
 	var order []string
-	b.WithOnStepAny(func(from dfaState, _ struct{}, to dfaState, _ dfaSymbol, _ struct{}) {
+	b.WithOnStepAny(func(from dfaState, to dfaState, e dfaSymbol) {
 		order = append(order, "step:any")
 	})
-	b.WithOnStep(0, 1, func(_ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnStep(0, 1, func(e dfaSymbol) {
 		order = append(order, "step:0->1")
 	})
-	b.WithOnEnterAny(func(to dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnEnterAny(func(to dfaState, e dfaSymbol) {
 		order = append(order, "enter:any")
 	})
-	b.WithOnExitAny(func(from dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnExitAny(func(from dfaState, e dfaSymbol) {
 		order = append(order, "exit:any")
 	})
-	b.WithOnExit(0, func(_ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnExit(0, func(e dfaSymbol) {
 		order = append(order, "exit:0")
 	})
-	b.WithOnEnter(1, func(_ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnEnter(1, func(e dfaSymbol) {
 		order = append(order, "enter:1")
 	})
 
@@ -185,7 +185,7 @@ func TestDFABuilderBuildEngineObserverOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildEngine() error = %v", err)
 	}
-	e.Step("a", struct{}{})
+	e.Step("a")
 
 	wantOrder := []string{"step:any", "step:0->1", "exit:any", "exit:0", "enter:any", "enter:1"}
 	if len(order) != len(wantOrder) {
@@ -199,7 +199,7 @@ func TestDFABuilderBuildEngineObserverOrder(t *testing.T) {
 }
 
 func TestDFABuilderEnterExitCallbacksIgnoreSelfTransition(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol]()
 	b.WithStart(0).
 		WithAccepting(0).
 		WithTransition(0, "a", 0)
@@ -209,16 +209,16 @@ func TestDFABuilderEnterExitCallbacksIgnoreSelfTransition(t *testing.T) {
 	var exitAnyCalls int
 	var exitCalls int
 
-	b.WithOnEnterAny(func(to dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnEnterAny(func(to dfaState, e dfaSymbol) {
 		enterAnyCalls++
 	})
-	b.WithOnEnter(0, func(_ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnEnter(0, func(e dfaSymbol) {
 		enterCalls++
 	})
-	b.WithOnExitAny(func(from dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnExitAny(func(from dfaState, e dfaSymbol) {
 		exitAnyCalls++
 	})
-	b.WithOnExit(0, func(_ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnExit(0, func(e dfaSymbol) {
 		exitCalls++
 	})
 
@@ -226,7 +226,7 @@ func TestDFABuilderEnterExitCallbacksIgnoreSelfTransition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildEngine() error = %v", err)
 	}
-	e.Step("a", struct{}{})
+	e.Step("a")
 
 	if enterAnyCalls != 0 {
 		t.Fatalf("onEnterAny calls = %d, want 0", enterAnyCalls)
@@ -243,7 +243,7 @@ func TestDFABuilderEnterExitCallbacksIgnoreSelfTransition(t *testing.T) {
 }
 
 func TestDFABuilderEnterExitCallbacksIncludeSelfTransitionWhenEnabled(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol]()
 	b.WithStart(0).
 		WithAccepting(0).
 		WithTransition(0, "a", 0).
@@ -254,16 +254,16 @@ func TestDFABuilderEnterExitCallbacksIncludeSelfTransitionWhenEnabled(t *testing
 	var exitAnyCalls int
 	var exitCalls int
 
-	b.WithOnEnterAny(func(to dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnEnterAny(func(to dfaState, e dfaSymbol) {
 		enterAnyCalls++
 	})
-	b.WithOnEnter(0, func(_ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnEnter(0, func(e dfaSymbol) {
 		enterCalls++
 	})
-	b.WithOnExitAny(func(from dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnExitAny(func(from dfaState, e dfaSymbol) {
 		exitAnyCalls++
 	})
-	b.WithOnExit(0, func(_ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnExit(0, func(e dfaSymbol) {
 		exitCalls++
 	})
 
@@ -271,7 +271,7 @@ func TestDFABuilderEnterExitCallbacksIncludeSelfTransitionWhenEnabled(t *testing
 	if err != nil {
 		t.Fatalf("BuildEngine() error = %v", err)
 	}
-	e.Step("a", struct{}{})
+	e.Step("a")
 
 	if enterAnyCalls != 1 {
 		t.Fatalf("onEnterAny calls = %d, want 1", enterAnyCalls)
@@ -287,33 +287,33 @@ func TestDFABuilderEnterExitCallbacksIncludeSelfTransitionWhenEnabled(t *testing
 	}
 }
 
-func TestDFABuilderWithObserverOverride(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
+func TestDFABuilderWithTransitionHooksOverride(t *testing.T) {
+	b := DFA[dfaState, dfaSymbol]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1)
 
-	obs := &dfaRecordingObserver[dfaState, dfaSymbol, struct{}, struct{}]{}
-	b.WithObserver(obs)
+	hooks := &dfaRecordingTransitionHooks[dfaState, dfaSymbol]{}
+	b.WithTransitionHooks(hooks)
 
 	e, err := b.BuildEngine()
 	if err != nil {
 		t.Fatalf("BuildEngine() error = %v", err)
 	}
-	e.Step("a", struct{}{})
-	if obs.calls != 1 {
-		t.Fatalf("observer calls = %d, want 1", obs.calls)
+	e.Step("a")
+	if hooks.calls != 1 {
+		t.Fatalf("transition hooks calls = %d, want 1", hooks.calls)
 	}
 }
 
 func TestDFABuilderBuildAtomicEngine(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1)
 
 	var calls int
-	b.WithOnEnterAny(func(to dfaState, _ struct{}, _ dfaSymbol, _ struct{}) {
+	b.WithOnEnterAny(func(to dfaState, e dfaSymbol) {
 		calls++
 	})
 
@@ -321,20 +321,20 @@ func TestDFABuilderBuildAtomicEngine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildAtomicEngine() error = %v", err)
 	}
-	e.Step("a", struct{}{})
+	e.Step("a")
 	if calls != 1 {
 		t.Fatalf("onEnterAny calls = %d, want 1", calls)
 	}
 }
 
 func TestDFABuilderBuildRunner(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1)
 
 	var calls int
-	b.WithOnStepAny(func(from dfaState, _ struct{}, to dfaState, _ dfaSymbol, _ struct{}) {
+	b.WithOnStepAny(func(from dfaState, to dfaState, e dfaSymbol) {
 		calls++
 	})
 
@@ -347,7 +347,7 @@ func TestDFABuilderBuildRunner(t *testing.T) {
 	go func() { done <- r.Run(context.Background()) }()
 
 	events := r.Events()
-	events <- runner.Event[dfaSymbol, struct{}]{Event: "a", Payload: struct{}{}}
+	events <- runner.Event[dfaSymbol]{Event: "a"}
 	close(events)
 
 	if err := <-done; err != nil {
@@ -359,7 +359,7 @@ func TestDFABuilderBuildRunner(t *testing.T) {
 }
 
 func TestDFABuilderBuildEngineErrorMissingExecutor(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1).
@@ -374,7 +374,7 @@ func TestDFABuilderBuildEngineErrorMissingExecutor(t *testing.T) {
 }
 
 func TestDFABuilderTransitionErrorPropagates(t *testing.T) {
-	b := DFA[dfaState, dfaSymbol, struct{}, struct{}]()
+	b := DFA[dfaState, dfaSymbol]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, "a", 1).
@@ -386,7 +386,7 @@ func TestDFABuilderTransitionErrorPropagates(t *testing.T) {
 }
 
 func TestFacadeDFAFlow(t *testing.T) {
-	b := DFA[dfaState, dfaByteSymbol, struct{}, struct{}]()
+	b := DFA[dfaState, dfaByteSymbol]()
 	b.WithStart(0).
 		WithAccepting(1).
 		WithTransition(0, 'a', 1)
@@ -395,7 +395,7 @@ func TestFacadeDFAFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildEngine() error = %v", err)
 	}
-	e.Step('a', struct{}{})
+	e.Step('a')
 	if !e.Accepting() {
 		t.Fatalf("expected accepting state")
 	}

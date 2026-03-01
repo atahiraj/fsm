@@ -10,66 +10,61 @@ type FSM[S any, I any] interface {
 	IsAccepting(s S) bool
 }
 
-// Observer receives step notifications.
+// TransitionHooks receives transition notifications.
 // All methods are synchronous and called from the Engine's goroutine.
-type Observer[S any, I any, SP any, IP any] interface {
-	OnStep(from S, sp SP, to S, e I, ep IP)
+type TransitionHooks[S any, I any] interface {
+	OnTransition(from S, to S, e I)
 }
 
-// Engine executes an FSM and notifies an Observer.
+// Engine executes an FSM and notifies TransitionHooks.
 // It is synchronous and not safe for concurrent use by design.
-//
-// SP = state payload (associated with the current state).
-// IP = payload associated with the input symbol passed to Step.
-type Engine[S any, I any, SP any, IP any] struct {
-	fsm     FSM[S, I]
-	obs     Observer[S, I, SP, IP]
-	cur     S
-	payload SP
+type Engine[S any, I any] struct {
+	fsm   FSM[S, I]
+	hooks TransitionHooks[S, I]
+	cur   S
 }
 
 // New constructs a Engine and positions it at the FSM's start configuration.
-func New[S any, I any, SP any, IP any](fsm FSM[S, I], obs Observer[S, I, SP, IP]) *Engine[S, I, SP, IP] {
-	return &Engine[S, I, SP, IP]{fsm: fsm, obs: obs, cur: fsm.Start()}
+func New[S any, I any](fsm FSM[S, I], hooks TransitionHooks[S, I]) *Engine[S, I] {
+	return &Engine[S, I]{fsm: fsm, hooks: hooks, cur: fsm.Start()}
 }
 
 // Reset returns the Engine to the FSM's start configuration.
-func (e *Engine[S, I, SP, IP]) Reset(p SP) {
+func (e *Engine[S, I]) Reset() {
 	e.cur = e.fsm.Start()
-	e.payload = p
 }
 
-func (e *Engine[S, I, SP, IP]) Cur() S          { return e.cur }
-func (e *Engine[S, I, SP, IP]) Accepting() bool { return e.fsm.IsAccepting(e.cur) }
+func (e *Engine[S, I]) Cur() S          { return e.cur }
+func (e *Engine[S, I]) Accepting() bool { return e.fsm.IsAccepting(e.cur) }
 
 // Step attempts to advance the machine by one symbol.
 // It is a no-op when no transition exists.
-func (e *Engine[S, I, SP, IP]) Step(symbol I, payload IP) {
-	_ = e.TryStep(symbol, payload)
+func (e *Engine[S, I]) Step(symbol I) {
+	_ = e.TryStep(symbol)
 }
 
 // TryStep advances the machine by one symbol and reports whether a transition existed.
-// The observer is notified only when a transition exists.
-func (e *Engine[S, I, SP, IP]) TryStep(symbol I, payload IP) bool {
+// The hooks are notified only when a transition exists.
+func (e *Engine[S, I]) TryStep(symbol I) bool {
 	to, ok := e.fsm.Step(e.cur, symbol)
 	if !ok {
 		return false
 	}
-	e.obs.OnStep(e.cur, e.payload, to, symbol, payload)
+	e.hooks.OnTransition(e.cur, to, symbol)
 	e.cur = to
 	return true
 }
 
 // CanStep reports whether a transition exists for the current configuration and symbol.
-// It does not update engine state or notify the observer.
-func (e *Engine[S, I, SP, IP]) CanStep(symbol I) bool {
+// It does not update engine state or notify the hooks.
+func (e *Engine[S, I]) CanStep(symbol I) bool {
 	_, ok := e.PeekStep(symbol)
 	return ok
 }
 
 // PeekStep reports the next configuration for a symbol without mutating engine state.
-// It does not update engine state or notify the observer.
-func (e *Engine[S, I, SP, IP]) PeekStep(symbol I) (S, bool) {
+// It does not update engine state or notify the hooks.
+func (e *Engine[S, I]) PeekStep(symbol I) (S, bool) {
 	next, ok := e.fsm.Step(e.cur, symbol)
 	return next, ok
 }

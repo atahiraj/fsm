@@ -23,11 +23,11 @@ type recordedStep struct {
 	sym  byte
 }
 
-type recordingObserver struct {
+type recordingTransitionHooks struct {
 	steps []recordedStep
 }
 
-func (o *recordingObserver) OnStep(from int, _ struct{}, to int, e byte, _ struct{}) {
+func (o *recordingTransitionHooks) OnTransition(from int, to int, e byte) {
 	o.steps = append(o.steps, recordedStep{from: from, to: to, sym: e})
 }
 
@@ -42,13 +42,13 @@ func TestEngineTryStepCanStepAndPeekStepWithDFA(t *testing.T) {
 			{1, int('a')}: 1,
 		},
 	}
-	obs := &recordingObserver{}
+	hooks := &recordingTransitionHooks{}
 
-	e, err := DFA[int, byte, struct{}, struct{}](d).WithObserver(obs).Build()
+	e, err := DFA[int, byte](d).WithTransitionHooks(hooks).Build()
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	e.Reset(struct{}{})
+	e.Reset()
 
 	if got := e.CanStep('b'); got {
 		t.Fatalf("CanStep('b') = %v, want false", got)
@@ -59,18 +59,18 @@ func TestEngineTryStepCanStepAndPeekStepWithDFA(t *testing.T) {
 	if got := e.Cur(); got != 0 {
 		t.Fatalf("Cur() after missing probes = %d, want 0", got)
 	}
-	if len(obs.steps) != 0 {
-		t.Fatalf("observer steps after missing probes = %d, want 0", len(obs.steps))
+	if len(hooks.steps) != 0 {
+		t.Fatalf("transition hooks steps after missing probes = %d, want 0", len(hooks.steps))
 	}
 
-	if handled := e.TryStep('b', struct{}{}); handled {
+	if handled := e.TryStep('b'); handled {
 		t.Fatalf("TryStep('b') handled = %v, want false", handled)
 	}
 	if got := e.Cur(); got != 0 {
 		t.Fatalf("Cur() after missing transition = %d, want 0", got)
 	}
-	if len(obs.steps) != 0 {
-		t.Fatalf("observer steps after missing transition = %d, want 0", len(obs.steps))
+	if len(hooks.steps) != 0 {
+		t.Fatalf("transition hooks steps after missing transition = %d, want 0", len(hooks.steps))
 	}
 
 	if got := e.CanStep('a'); !got {
@@ -82,21 +82,21 @@ func TestEngineTryStepCanStepAndPeekStepWithDFA(t *testing.T) {
 	if got := e.Cur(); got != 0 {
 		t.Fatalf("Cur() after PeekStep('a') = %d, want 0", got)
 	}
-	if len(obs.steps) != 0 {
-		t.Fatalf("observer steps after PeekStep('a') = %d, want 0", len(obs.steps))
+	if len(hooks.steps) != 0 {
+		t.Fatalf("transition hooks steps after PeekStep('a') = %d, want 0", len(hooks.steps))
 	}
 
-	if handled := e.TryStep('a', struct{}{}); !handled {
+	if handled := e.TryStep('a'); !handled {
 		t.Fatalf("TryStep('a') handled = %v, want true", handled)
 	}
 	if got := e.Cur(); got != 1 {
 		t.Fatalf("Cur() after existing transition = %d, want 1", got)
 	}
-	if len(obs.steps) != 1 {
-		t.Fatalf("observer steps after existing transition = %d, want 1", len(obs.steps))
+	if len(hooks.steps) != 1 {
+		t.Fatalf("transition hooks steps after existing transition = %d, want 1", len(hooks.steps))
 	}
-	if got := obs.steps[0]; got.from != 0 || got.to != 1 || got.sym != 'a' {
-		t.Fatalf("observer step = %+v, want from=0 to=1 sym='a'", got)
+	if got := hooks.steps[0]; got.from != 0 || got.to != 1 || got.sym != 'a' {
+		t.Fatalf("transition hooks step = %+v, want from=0 to=1 sym='a'", got)
 	}
 }
 
@@ -106,27 +106,27 @@ func TestEngineStepSkipsMissingTransition(t *testing.T) {
 		accepting:   map[int]bool{},
 		transitions: map[[2]int]int{{0, int('a')}: 1},
 	}
-	obs := &recordingObserver{}
+	hooks := &recordingTransitionHooks{}
 
-	e, err := DFA[int, byte, struct{}, struct{}](d).WithObserver(obs).Build()
+	e, err := DFA[int, byte](d).WithTransitionHooks(hooks).Build()
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	e.Reset(struct{}{})
+	e.Reset()
 
-	e.Step('b', struct{}{})
+	e.Step('b')
 
 	if got := e.Cur(); got != 0 {
 		t.Fatalf("Cur() after Step('b') = %d, want 0", got)
 	}
-	if len(obs.steps) != 0 {
-		t.Fatalf("observer steps after Step('b') = %d, want 0", len(obs.steps))
+	if len(hooks.steps) != 0 {
+		t.Fatalf("transition hooks steps after Step('b') = %d, want 0", len(hooks.steps))
 	}
 }
 
-type noopObserver2 struct{}
+type noopTransitionHooks2 struct{}
 
-func (noopObserver2) OnStep(int, struct{}, int, byte, struct{}) {}
+func (noopTransitionHooks2) OnTransition(int, int, byte) {}
 
 func TestAtomicEngineTryStepCanStepAndPeekStep(t *testing.T) {
 	d := testDFALike{
@@ -134,12 +134,12 @@ func TestAtomicEngineTryStepCanStepAndPeekStep(t *testing.T) {
 		accepting:   map[int]bool{},
 		transitions: map[[2]int]int{{0, int('a')}: 1},
 	}
-	e, err := DFA[int, byte, struct{}, struct{}](d).WithObserver(noopObserver2{}).Build()
+	e, err := DFA[int, byte](d).WithTransitionHooks(noopTransitionHooks2{}).Build()
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
 	a := NewAtomic(e)
-	a.Reset(struct{}{})
+	a.Reset()
 
 	if got := a.CanStep('b'); got {
 		t.Fatalf("CanStep('b') = %v, want false", got)
@@ -150,7 +150,7 @@ func TestAtomicEngineTryStepCanStepAndPeekStep(t *testing.T) {
 	if got := a.Cur(); got != 0 {
 		t.Fatalf("Cur() after missing probes = %d, want 0", got)
 	}
-	if handled := a.TryStep('b', struct{}{}); handled {
+	if handled := a.TryStep('b'); handled {
 		t.Fatalf("TryStep('b') handled = %v, want false", handled)
 	}
 	if got := a.Cur(); got != 0 {
@@ -166,7 +166,7 @@ func TestAtomicEngineTryStepCanStepAndPeekStep(t *testing.T) {
 	if got := a.Cur(); got != 0 {
 		t.Fatalf("Cur() after PeekStep('a') = %d, want 0", got)
 	}
-	if handled := a.TryStep('a', struct{}{}); !handled {
+	if handled := a.TryStep('a'); !handled {
 		t.Fatalf("TryStep('a') handled = %v, want true", handled)
 	}
 	if got := a.Cur(); got != 1 {

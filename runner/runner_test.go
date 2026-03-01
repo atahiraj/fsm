@@ -8,8 +8,7 @@ import (
 )
 
 type recordedEvent struct {
-	event   string
-	payload int
+	event string
 }
 
 type recordingStepper struct {
@@ -17,10 +16,10 @@ type recordingStepper struct {
 	events []recordedEvent
 }
 
-func (s *recordingStepper) Step(event string, payload int) {
+func (s *recordingStepper) Step(event string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.events = append(s.events, recordedEvent{event: event, payload: payload})
+	s.events = append(s.events, recordedEvent{event: event})
 }
 
 func (s *recordingStepper) snapshot() []recordedEvent {
@@ -33,7 +32,7 @@ func (s *recordingStepper) snapshot() []recordedEvent {
 
 func TestRunnerRunConsumesEventsInOrder(t *testing.T) {
 	stepper := &recordingStepper{}
-	r := New[string, int](stepper, 2)
+	r := New[string](stepper, 2)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -44,8 +43,8 @@ func TestRunnerRunConsumesEventsInOrder(t *testing.T) {
 	}()
 
 	events := r.Events()
-	events <- Event[string, int]{Event: "a", Payload: 1}
-	events <- Event[string, int]{Event: "b", Payload: 2}
+	events <- Event[string]{Event: "a"}
+	events <- Event[string]{Event: "b"}
 	close(events)
 
 	select {
@@ -58,10 +57,7 @@ func TestRunnerRunConsumesEventsInOrder(t *testing.T) {
 	}
 
 	got := stepper.snapshot()
-	want := []recordedEvent{
-		{event: "a", payload: 1},
-		{event: "b", payload: 2},
-	}
+	want := []recordedEvent{{event: "a"}, {event: "b"}}
 	if len(got) != len(want) {
 		t.Fatalf("events len = %d, want %d", len(got), len(want))
 	}
@@ -74,7 +70,7 @@ func TestRunnerRunConsumesEventsInOrder(t *testing.T) {
 
 func TestRunnerRunReturnsContextErrorOnCancel(t *testing.T) {
 	stepper := &recordingStepper{}
-	r := New[string, int](stepper, 0)
+	r := New[string](stepper, 0)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -96,7 +92,7 @@ func TestRunnerRunReturnsContextErrorOnCancel(t *testing.T) {
 
 func TestRunnerNegativeBufferFallsBackToUnbuffered(t *testing.T) {
 	stepper := &recordingStepper{}
-	r := New[string, int](stepper, -1)
+	r := New[string](stepper, -1)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -108,7 +104,7 @@ func TestRunnerNegativeBufferFallsBackToUnbuffered(t *testing.T) {
 
 	events := r.Events()
 	go func() {
-		events <- Event[string, int]{Event: "x", Payload: 7}
+		events <- Event[string]{Event: "x"}
 		close(events)
 	}()
 
@@ -122,7 +118,7 @@ func TestRunnerNegativeBufferFallsBackToUnbuffered(t *testing.T) {
 	}
 
 	got := stepper.snapshot()
-	if len(got) != 1 || got[0] != (recordedEvent{event: "x", payload: 7}) {
-		t.Fatalf("events = %+v, want [{event:x payload:7}]", got)
+	if len(got) != 1 || got[0] != (recordedEvent{event: "x"}) {
+		t.Fatalf("events = %+v, want [{event:x}]", got)
 	}
 }
