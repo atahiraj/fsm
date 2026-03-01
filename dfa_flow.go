@@ -134,13 +134,13 @@ func (b *DFABuilder[State, Input, StateKey, InputKey]) WithAccepting(states ...S
 	return b
 }
 
-// WithTransition inserts (from, a, to) into δ.
+// WithTransition inserts (from, a, to) into δ using an input key.
 // Preconditions: transition does not introduce nondeterminism.
-func (b *DFABuilder[State, Input, StateKey, InputKey]) WithTransition(from State, input Input, to State) *DFABuilder[State, Input, StateKey, InputKey] {
+func (b *DFABuilder[State, Input, StateKey, InputKey]) WithTransition(from State, inputKey InputKey, to State) *DFABuilder[State, Input, StateKey, InputKey] {
 	if b.err != nil {
 		return b
 	}
-	if err := b.dfa.Transition(from, input, to); err != nil {
+	if err := b.dfa.TransitionKey(from, inputKey, to); err != nil {
 		b.err = err
 	}
 	return b
@@ -149,11 +149,11 @@ func (b *DFABuilder[State, Input, StateKey, InputKey]) WithTransition(from State
 // WithTransitionHook inserts (from, a, to) into δ and registers transition callbacks for from -> to.
 // Callbacks are executed in the same order as provided.
 // Preconditions: transition does not introduce nondeterminism.
-func (b *DFABuilder[State, Input, StateKey, InputKey]) WithTransitionHook(from State, input Input, to State, hooks ...func(e Input)) *DFABuilder[State, Input, StateKey, InputKey] {
+func (b *DFABuilder[State, Input, StateKey, InputKey]) WithTransitionHook(from State, inputKey InputKey, to State, hooks ...func(e Input)) *DFABuilder[State, Input, StateKey, InputKey] {
 	if b.err != nil {
 		return b
 	}
-	if err := b.dfa.Transition(from, input, to); err != nil {
+	if err := b.dfa.TransitionKey(from, inputKey, to); err != nil {
 		b.err = err
 		return b
 	}

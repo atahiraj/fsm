@@ -120,26 +120,35 @@ func (b *Builder[State, Input, StateKey, InputKey]) WithGraph(g graphLike[State,
 
 // Transition inserts (from, a, to) into δ. It rejects nondeterminism.
 func (b *Builder[State, Input, StateKey, InputKey]) Transition(from State, input Input, to State) error {
+	inputKey := input.Key()
+	if err := b.TransitionKey(from, inputKey, to); err != nil {
+		return err
+	}
+	b.symByKey[inputKey] = input
+	return nil
+}
+
+// TransitionKey inserts (from, a, to) into δ using only the input key.
+// It rejects nondeterminism.
+func (b *Builder[State, Input, StateKey, InputKey]) TransitionKey(from State, inputKey InputKey, to State) error {
 	fromKey := from.Key()
 	toKey := to.Key()
-	symKey := input.Key()
 
 	b.stateByKey[fromKey] = from
 	b.stateByKey[toKey] = to
-	b.symByKey[symKey] = input
 
 	b.states.Add(fromKey, toKey)
-	b.alphabet.Add(symKey)
+	b.alphabet.Add(inputKey)
 
-	existing := b.g.Delta(fromKey, symKey)
+	existing := b.g.Delta(fromKey, inputKey)
 	if len(existing) == 0 {
-		b.g.AddEdge(fromKey, toKey, symKey)
+		b.g.AddEdge(fromKey, toKey, inputKey)
 		return nil
 	}
 	if len(existing) == 1 && existing[0] == toKey {
 		return nil
 	}
-	return fmt.Errorf("dfa: transition already defined for (%v, %v)", from, input)
+	return fmt.Errorf("dfa: transition already defined for (%v, %v)", from, inputKey)
 }
 
 func valuesFromKeys[K comparable, V any](keys []K, byKey map[K]V) []V {

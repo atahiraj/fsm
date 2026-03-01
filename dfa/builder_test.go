@@ -15,6 +15,13 @@ type bInput byte
 
 func (s bInput) Key() byte { return byte(s) }
 
+type bEvent struct {
+	kind    byte
+	payload int
+}
+
+func (e bEvent) Key() byte { return e.kind }
+
 func bWord(xs ...byte) []bInput {
 	out := make([]bInput, 0, len(xs))
 	for _, x := range xs {
@@ -33,6 +40,24 @@ func TestTransitionDeterminism(t *testing.T) {
 	}
 	if err := b.Transition(0, 'a', 2); err == nil {
 		t.Fatalf("expected error on nondeterministic transition")
+	}
+}
+
+func TestTransitionKey(t *testing.T) {
+	b := NewBuilder[bState, bEvent, int, byte]()
+	b.SetStart(0)
+	b.AddAccepting(1)
+
+	if err := b.TransitionKey(0, 'a', 1); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	d, err := b.Build()
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if !d.Accepts([]bEvent{{kind: 'a', payload: 99}}) {
+		t.Fatalf("expected acceptance for key-based transition")
 	}
 }
 

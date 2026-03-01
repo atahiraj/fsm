@@ -20,6 +20,13 @@ type nfaByteInput byte
 
 func (s nfaByteInput) Key() byte { return byte(s) }
 
+type nfaEvent struct {
+	kind    string
+	payload int
+}
+
+func (e nfaEvent) Key() string { return e.kind }
+
 type nfaGraph struct {
 	sym map[nfaState]map[nfaInput][]nfaState
 	eps map[nfaState][]nfaState
@@ -137,6 +144,31 @@ func TestNFABuilderBuildAtomic(t *testing.T) {
 	}
 	if !a.Accepts([]nfaInput{"a"}) {
 		t.Fatalf("atomic nfa should accept [a]")
+	}
+}
+
+func TestNFABuilderWithTransitionUsesInputKey(t *testing.T) {
+	b := NFA[nfaState, nfaEvent, int, string]()
+	b.WithStart(0).
+		WithAccepting(1).
+		WithTransition(0, "go", 1)
+
+	var gotPayload int
+	b.WithOnTransitionAny(func(from []nfaState, to []nfaState, e nfaEvent) {
+		gotPayload = e.payload
+	})
+
+	e, err := b.BuildEngine()
+	if err != nil {
+		t.Fatalf("BuildEngine() error = %v", err)
+	}
+	e.Step(nfaEvent{kind: "go", payload: 42})
+
+	if gotPayload != 42 {
+		t.Fatalf("payload = %d, want 42", gotPayload)
+	}
+	if !e.Accepting() {
+		t.Fatalf("engine should be accepting after transition")
 	}
 }
 

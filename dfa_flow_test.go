@@ -20,6 +20,13 @@ type dfaByteInput byte
 
 func (s dfaByteInput) Key() byte { return byte(s) }
 
+type dfaEvent struct {
+	kind    string
+	payload string
+}
+
+func (e dfaEvent) Key() string { return e.kind }
+
 type dfaGraph struct {
 	next map[dfaState]map[dfaInput]dfaState
 }
@@ -122,6 +129,31 @@ func TestDFABuilderWithTransitionHook(t *testing.T) {
 	}
 	if order[0] != "first" || order[1] != "second" {
 		t.Fatalf("transition hook order = %v, want [first second]", order)
+	}
+}
+
+func TestDFABuilderWithTransitionUsesInputKey(t *testing.T) {
+	b := DFA[dfaState, dfaEvent]()
+	b.WithStart(0).
+		WithAccepting(1).
+		WithTransition(0, "go", 1)
+
+	var gotPayload string
+	b.WithOnTransition(0, 1, func(e dfaEvent) {
+		gotPayload = e.payload
+	})
+
+	e, err := b.BuildEngine()
+	if err != nil {
+		t.Fatalf("BuildEngine() error = %v", err)
+	}
+	e.Step(dfaEvent{kind: "go", payload: "p-123"})
+
+	if gotPayload != "p-123" {
+		t.Fatalf("payload = %q, want %q", gotPayload, "p-123")
+	}
+	if !e.Accepting() {
+		t.Fatalf("engine should be accepting after transition")
 	}
 }
 

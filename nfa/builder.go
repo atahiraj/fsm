@@ -157,17 +157,22 @@ func (b *Builder[State, Input, StateKey, InputKey]) WithGraph(g graphLike[State,
 
 // Transition inserts (from, a, to) into δ.
 func (b *Builder[State, Input, StateKey, InputKey]) Transition(from State, input Input, to State) {
+	inputKey := input.Key()
+	b.TransitionKey(from, inputKey, to)
+	b.symByKey[inputKey] = input
+}
+
+// TransitionKey inserts (from, a, to) into δ using only the input key.
+func (b *Builder[State, Input, StateKey, InputKey]) TransitionKey(from State, inputKey InputKey, to State) {
 	fromKey := from.Key()
 	toKey := to.Key()
-	symKey := input.Key()
 
 	b.stateByKey[fromKey] = from
 	b.stateByKey[toKey] = to
-	b.symByKey[symKey] = input
 
 	b.states.Add(fromKey, toKey)
-	b.alphabet.Add(symKey)
-	b.g.AddEdge(fromKey, toKey, Sym(symKey))
+	b.alphabet.Add(inputKey)
+	b.g.AddEdge(fromKey, toKey, Sym(inputKey))
 }
 
 // Epsilon inserts (from, ε, to) into δ.

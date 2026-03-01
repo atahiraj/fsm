@@ -13,6 +13,13 @@ type bInput byte
 
 func (s bInput) Key() byte { return byte(s) }
 
+type bEvent struct {
+	kind    byte
+	payload int
+}
+
+func (e bEvent) Key() byte { return e.kind }
+
 type bGraph struct {
 	bySym map[bState]map[bInput][]bState
 	eps   map[bState][]bState
@@ -53,6 +60,21 @@ func TestBuildAtomic(t *testing.T) {
 	}
 	if a.Accepts(nil) {
 		t.Fatalf("expected empty word to be rejected")
+	}
+}
+
+func TestTransitionKey(t *testing.T) {
+	b := NewBuilder[bState, bEvent, int, byte]()
+	b.SetStart(0)
+	b.AddAccepting(1)
+	b.TransitionKey(0, 'a', 1)
+
+	n, err := b.Build()
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if !n.Accepts([]bEvent{{kind: 'a', payload: 7}}) {
+		t.Fatalf("expected acceptance for key-based transition")
 	}
 }
 

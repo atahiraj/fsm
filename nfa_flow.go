@@ -123,9 +123,9 @@ func (b *NFABuilder[State, Input, StateKey, InputKey]) WithAccepting(states ...S
 	return b
 }
 
-// WithTransition inserts (from, a, to) into δ.
-func (b *NFABuilder[State, Input, StateKey, InputKey]) WithTransition(from State, input Input, to State) *NFABuilder[State, Input, StateKey, InputKey] {
-	b.nfa.Transition(from, input, to)
+// WithTransition inserts (from, a, to) into δ using an input key.
+func (b *NFABuilder[State, Input, StateKey, InputKey]) WithTransition(from State, inputKey InputKey, to State) *NFABuilder[State, Input, StateKey, InputKey] {
+	b.nfa.TransitionKey(from, inputKey, to)
 	return b
 }
 
