@@ -73,15 +73,26 @@ type DFABuilder[
 	// Dispatch order is fixed by phase:
 	// step-any -> step -> exit-any -> exit -> enter-any -> enter
 	stepAnyCallbacks  []func(from State, to State, e Symbol)
-	stepCallbacks     []func(from State, to State, e Symbol)
-	exitAnyCallbacks  []func(from State, to State, e Symbol)
-	exitCallbacks     []func(from State, to State, e Symbol)
-	enterAnyCallbacks []func(from State, to State, e Symbol)
-	enterCallbacks    []func(from State, to State, e Symbol)
+	stepCallbacks     []dfaStepCallback[StateKey, Symbol]
+	exitAnyCallbacks  []func(from State, e Symbol)
+	exitCallbacks     []dfaStateCallback[StateKey, Symbol]
+	enterAnyCallbacks []func(to State, e Symbol)
+	enterCallbacks    []dfaStateCallback[StateKey, Symbol]
 
 	dfaOverride   *dfa.DFA[State, Symbol, StateKey, SymbolKey]
 	hooksOverride engine.TransitionHooks[State, Symbol]
 	err           error
+}
+
+type dfaStepCallback[StateKey comparable, Symbol any] struct {
+	from     StateKey
+	to       StateKey
+	callback func(e Symbol)
+}
+
+type dfaStateCallback[StateKey comparable, Symbol any] struct {
+	target   StateKey
+	callback func(e Symbol)
 }
 
 // WithDFA overrides the DFA built by this builder.
@@ -158,64 +169,41 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnStepAny(f func(fr
 
 // WithOnStep registers a callback for a specific transition from -> to.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnStep(from State, to State, f func(e Symbol)) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
-	fromKey := from.Key()
-	toKey := to.Key()
-	decoratedFunc := func(from State, to State, e Symbol) {
-		if from.Key() == fromKey && to.Key() == toKey {
-			f(e)
-		}
-	}
-	b.stepCallbacks = append(b.stepCallbacks, decoratedFunc)
+	b.stepCallbacks = append(b.stepCallbacks, dfaStepCallback[StateKey, Symbol]{
+		from:     from.Key(),
+		to:       to.Key(),
+		callback: f,
+	})
 	return b
 }
 
 // WithOnExit registers a callback when leaving state s.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnExit(s State, f func(e Symbol)) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
-	target := s.Key()
-	decoratedFunc := func(from State, to State, e Symbol) {
-		fromKey := from.Key()
-		toKey := to.Key()
-		if fromKey == target && (b.selfTransitionCallbacks || fromKey != toKey) {
-			f(e)
-		}
-	}
-	b.exitCallbacks = append(b.exitCallbacks, decoratedFunc)
+	b.exitCallbacks = append(b.exitCallbacks, dfaStateCallback[StateKey, Symbol]{
+		target:   s.Key(),
+		callback: f,
+	})
 	return b
 }
 
 // WithOnEnter registers a callback when entering state s.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnEnter(s State, f func(e Symbol)) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
-	target := s.Key()
-	decoratedFunc := func(from State, to State, e Symbol) {
-		fromKey := from.Key()
-		toKey := to.Key()
-		if toKey == target && (b.selfTransitionCallbacks || fromKey != toKey) {
-			f(e)
-		}
-	}
-	b.enterCallbacks = append(b.enterCallbacks, decoratedFunc)
+	b.enterCallbacks = append(b.enterCallbacks, dfaStateCallback[StateKey, Symbol]{
+		target:   s.Key(),
+		callback: f,
+	})
 	return b
 }
 
 // WithOnExitAny registers a callback when leaving any state.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnExitAny(f func(from State, e Symbol)) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
-	decoratedFunc := func(from State, to State, e Symbol) {
-		if b.selfTransitionCallbacks || from.Key() != to.Key() {
-			f(from, e)
-		}
-	}
-	b.exitAnyCallbacks = append(b.exitAnyCallbacks, decoratedFunc)
+	b.exitAnyCallbacks = append(b.exitAnyCallbacks, f)
 	return b
 }
 
 // WithOnEnterAny registers a callback when entering any state.
 func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnEnterAny(f func(to State, e Symbol)) *DFABuilder[State, Symbol, StateKey, SymbolKey] {
-	decoratedFunc := func(from State, to State, e Symbol) {
-		if b.selfTransitionCallbacks || from.Key() != to.Key() {
-			f(to, e)
-		}
-	}
-	b.enterAnyCallbacks = append(b.enterAnyCallbacks, decoratedFunc)
+	b.enterAnyCallbacks = append(b.enterAnyCallbacks, f)
 	return b
 }
 
@@ -244,28 +232,87 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) buildTransitionHooks() 
 		return nil, errors.New("transition hooks builder: executor is nil")
 	}
 
-	total := len(b.stepAnyCallbacks) + len(b.stepCallbacks) + len(b.exitAnyCallbacks) + len(b.exitCallbacks) + len(b.enterAnyCallbacks) + len(b.enterCallbacks)
-	callbacks := make([]func(from State, to State, e Symbol), 0, total)
+	stepRegistrations := make([]transitionhooks.Registration[State, Symbol, StateKey], 0, len(b.stepAnyCallbacks)+len(b.stepCallbacks))
 	for _, callback := range b.stepAnyCallbacks {
-		callbacks = append(callbacks, callback)
+		stepRegistrations = append(stepRegistrations, transitionhooks.Registration[State, Symbol, StateKey]{
+			Mode:     transitionhooks.MatchAny,
+			Callback: callback,
+		})
 	}
 	for _, callback := range b.stepCallbacks {
-		callbacks = append(callbacks, callback)
-	}
-	for _, callback := range b.exitAnyCallbacks {
-		callbacks = append(callbacks, callback)
-	}
-	for _, callback := range b.exitCallbacks {
-		callbacks = append(callbacks, callback)
-	}
-	for _, callback := range b.enterAnyCallbacks {
-		callbacks = append(callbacks, callback)
-	}
-	for _, callback := range b.enterCallbacks {
-		callbacks = append(callbacks, callback)
+		stepCallback := callback.callback
+		stepRegistrations = append(stepRegistrations, transitionhooks.Registration[State, Symbol, StateKey]{
+			Mode:    transitionhooks.MatchFromToKey,
+			FromKey: callback.from,
+			ToKey:   callback.to,
+			Callback: func(from State, to State, e Symbol) {
+				stepCallback(e)
+			},
+		})
 	}
 
-	return transitionhooks.New[State, Symbol](b.exec, callbacks...), nil
+	exitRegistrations := make([]transitionhooks.Registration[State, Symbol, StateKey], 0, len(b.exitAnyCallbacks)+len(b.exitCallbacks))
+	for _, callback := range b.exitAnyCallbacks {
+		exitAnyCallback := callback
+		exitRegistrations = append(exitRegistrations, transitionhooks.Registration[State, Symbol, StateKey]{
+			Mode: transitionhooks.MatchAny,
+			Callback: func(from State, to State, e Symbol) {
+				exitAnyCallback(from, e)
+			},
+		})
+	}
+	for _, callback := range b.exitCallbacks {
+		exitCallback := callback.callback
+		exitRegistrations = append(exitRegistrations, transitionhooks.Registration[State, Symbol, StateKey]{
+			Mode:    transitionhooks.MatchFromKey,
+			FromKey: callback.target,
+			Callback: func(from State, to State, e Symbol) {
+				exitCallback(e)
+			},
+		})
+	}
+
+	enterRegistrations := make([]transitionhooks.Registration[State, Symbol, StateKey], 0, len(b.enterAnyCallbacks)+len(b.enterCallbacks))
+	for _, callback := range b.enterAnyCallbacks {
+		enterAnyCallback := callback
+		enterRegistrations = append(enterRegistrations, transitionhooks.Registration[State, Symbol, StateKey]{
+			Mode: transitionhooks.MatchAny,
+			Callback: func(from State, to State, e Symbol) {
+				enterAnyCallback(to, e)
+			},
+		})
+	}
+	for _, callback := range b.enterCallbacks {
+		enterCallback := callback.callback
+		enterRegistrations = append(enterRegistrations, transitionhooks.Registration[State, Symbol, StateKey]{
+			Mode:  transitionhooks.MatchToKey,
+			ToKey: callback.target,
+			Callback: func(from State, to State, e Symbol) {
+				enterCallback(e)
+			},
+		})
+	}
+
+	var enterExitGuard transitionhooks.GroupGuard[StateKey]
+	if !b.selfTransitionCallbacks {
+		enterExitGuard = func(fromKey StateKey, toKey StateKey) bool { return fromKey != toKey }
+	}
+
+	return transitionhooks.NewCompiled(
+		b.exec,
+		func(state State) StateKey { return state.Key() },
+		transitionhooks.Group[State, Symbol, StateKey]{
+			Registrations: stepRegistrations,
+		},
+		transitionhooks.Group[State, Symbol, StateKey]{
+			Guard:         enterExitGuard,
+			Registrations: exitRegistrations,
+		},
+		transitionhooks.Group[State, Symbol, StateKey]{
+			Guard:         enterExitGuard,
+			Registrations: enterRegistrations,
+		},
+	), nil
 }
 
 // BuildEngine wires the DFA and transition hooks into an Engine.
@@ -282,7 +329,7 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) BuildEngine() (*engine.
 	if err != nil {
 		return nil, err
 	}
-	return engine.DFA[State, Symbol](d).WithTransitionHooks(hooks).Build()
+	return engine.DFA(d).WithTransitionHooks(hooks).Build()
 }
 
 // BuildAtomicEngine wires the DFA and transition hooks into a thread-safe Engine.
@@ -299,7 +346,7 @@ func (b *DFABuilder[State, Symbol, StateKey, SymbolKey]) BuildAtomicEngine() (*e
 	if err != nil {
 		return nil, err
 	}
-	return engine.DFA[State, Symbol](d).WithTransitionHooks(hooks).BuildAtomic()
+	return engine.DFA(d).WithTransitionHooks(hooks).BuildAtomic()
 }
 
 // BuildRunner wires the DFA and transition hooks into an Engine-backed Runner.

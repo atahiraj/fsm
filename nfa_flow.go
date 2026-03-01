@@ -2,9 +2,9 @@ package fsm
 
 import (
 	"errors"
+	"sort"
 
 	"github.com/stnhrsprkwns/fsm/engine"
-	"github.com/stnhrsprkwns/fsm/internal/set"
 	"github.com/stnhrsprkwns/fsm/key"
 	"github.com/stnhrsprkwns/fsm/nfa"
 	"github.com/stnhrsprkwns/fsm/runner"
@@ -17,7 +17,21 @@ type NFAGraph[State any, Symbol any] interface {
 	Epsilon(from State) []State
 }
 
-type nfaTransitionCallback[State any, Symbol any] func(from []State, to []State, e Symbol)
+type nfaStepCallback[State key.Keyer[StateKey], StateKey comparable, Symbol any] struct {
+	fromKeys []StateKey
+	toKeys   []StateKey
+	callback func(e Symbol)
+}
+
+type nfaConfigCallback[State key.Keyer[StateKey], StateKey comparable, Symbol any] struct {
+	keys     []StateKey
+	callback func(e Symbol)
+}
+
+type nfaStateCallback[StateKey comparable, Symbol any] struct {
+	target   StateKey
+	callback func(e Symbol)
+}
 
 // NFA constructs a top-level NFA builder.
 func NFA[
@@ -59,12 +73,12 @@ type NFABuilder[
 
 	// Dispatch order is fixed by phase:
 	// exit-state -> exit -> step-any -> step -> enter-state -> enter
-	exitStateCallbacks  []nfaTransitionCallback[State, Symbol]
-	exitCallbacks       []nfaTransitionCallback[State, Symbol]
-	stepAnyCallbacks    []nfaTransitionCallback[State, Symbol]
-	stepCallbacks       []nfaTransitionCallback[State, Symbol]
-	enterStateCallbacks []nfaTransitionCallback[State, Symbol]
-	enterCallbacks      []nfaTransitionCallback[State, Symbol]
+	exitStateCallbacks  []nfaStateCallback[StateKey, Symbol]
+	exitCallbacks       []nfaConfigCallback[State, StateKey, Symbol]
+	stepAnyCallbacks    []func(from []State, to []State, e Symbol)
+	stepCallbacks       []nfaStepCallback[State, StateKey, Symbol]
+	enterStateCallbacks []nfaStateCallback[StateKey, Symbol]
+	enterCallbacks      []nfaConfigCallback[State, StateKey, Symbol]
 
 	nfaOverride   *nfa.NFA[State, Symbol, StateKey, SymbolKey]
 	hooksOverride engine.TransitionHooks[[]State, Symbol]
@@ -144,71 +158,47 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnStepAny(f func(fr
 
 // WithOnStep registers a callback for a specific transition from -> to.
 func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnStep(from []State, to []State, f func(e Symbol)) *NFABuilder[State, Symbol, StateKey, SymbolKey] {
-	fromKeySet := stateSetToKeySet(from)
-	toKeySet := stateSetToKeySet(to)
-	decoratedFunc := func(from []State, to []State, e Symbol) {
-		if fromKeySet.Equals(stateSetToKeySet(from)) &&
-			toKeySet.Equals(stateSetToKeySet(to)) {
-			f(e)
-		}
-	}
-	b.stepCallbacks = append(b.stepCallbacks, decoratedFunc)
+	b.stepCallbacks = append(b.stepCallbacks, nfaStepCallback[State, StateKey, Symbol]{
+		fromKeys: stateSliceToUniqueKeys(from),
+		toKeys:   stateSliceToUniqueKeys(to),
+		callback: f,
+	})
 	return b
 }
 
 // WithOnExit registers a callback when leaving configuration s.
 func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnExit(s []State, f func(e Symbol)) *NFABuilder[State, Symbol, StateKey, SymbolKey] {
-	keySet := stateSetToKeySet(s)
-	decoratedFunc := func(from []State, to []State, e Symbol) {
-		fromKeySet := stateSetToKeySet(from)
-		toKeySet := stateSetToKeySet(to)
-		if keySet.Equals(fromKeySet) && (b.selfTransitionCallbacks || !fromKeySet.Equals(toKeySet)) {
-			f(e)
-		}
-	}
-	b.exitCallbacks = append(b.exitCallbacks, decoratedFunc)
+	b.exitCallbacks = append(b.exitCallbacks, nfaConfigCallback[State, StateKey, Symbol]{
+		keys:     stateSliceToUniqueKeys(s),
+		callback: f,
+	})
 	return b
 }
 
 // WithOnEnter registers a callback when entering configuration s.
 func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnEnter(s []State, f func(e Symbol)) *NFABuilder[State, Symbol, StateKey, SymbolKey] {
-	keySet := stateSetToKeySet(s)
-	decoratedFunc := func(from []State, to []State, e Symbol) {
-		fromKeySet := stateSetToKeySet(from)
-		toKeySet := stateSetToKeySet(to)
-		if keySet.Equals(toKeySet) && (b.selfTransitionCallbacks || !fromKeySet.Equals(toKeySet)) {
-			f(e)
-		}
-	}
-	b.enterCallbacks = append(b.enterCallbacks, decoratedFunc)
+	b.enterCallbacks = append(b.enterCallbacks, nfaConfigCallback[State, StateKey, Symbol]{
+		keys:     stateSliceToUniqueKeys(s),
+		callback: f,
+	})
 	return b
 }
 
 // WithOnExitState registers a callback when a specific state exits the active set.
 func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnExitState(state State, f func(e Symbol)) *NFABuilder[State, Symbol, StateKey, SymbolKey] {
-	target := state.Key()
-	decoratedFunc := func(from []State, to []State, e Symbol) {
-		fromKeySet := stateSetToKeySet(from)
-		toKeySet := stateSetToKeySet(to)
-		if fromKeySet.Has(target) && !toKeySet.Has(target) {
-			f(e)
-		}
-	}
-	b.exitStateCallbacks = append(b.exitStateCallbacks, decoratedFunc)
+	b.exitStateCallbacks = append(b.exitStateCallbacks, nfaStateCallback[StateKey, Symbol]{
+		target:   state.Key(),
+		callback: f,
+	})
 	return b
 }
 
 // WithOnEnterState registers a callback when a specific state enters the active set.
 func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) WithOnEnterState(state State, f func(e Symbol)) *NFABuilder[State, Symbol, StateKey, SymbolKey] {
-	target := state.Key()
-	decoratedFunc := func(from []State, to []State, e Symbol) {
-		fromKeySet := stateSetToKeySet(from)
-		toKeySet := stateSetToKeySet(to)
-		if !fromKeySet.Has(target) && toKeySet.Has(target) {
-			f(e)
-		}
-	}
-	b.enterStateCallbacks = append(b.enterStateCallbacks, decoratedFunc)
+	b.enterStateCallbacks = append(b.enterStateCallbacks, nfaStateCallback[StateKey, Symbol]{
+		target:   state.Key(),
+		callback: f,
+	})
 	return b
 }
 
@@ -234,28 +224,107 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) buildTransitionHooks() 
 		return nil, errors.New("transition hooks builder: executor is nil")
 	}
 
-	total := len(b.exitStateCallbacks) + len(b.exitCallbacks) + len(b.stepAnyCallbacks) + len(b.stepCallbacks) + len(b.enterStateCallbacks) + len(b.enterCallbacks)
-	callbacks := make([]func(from []State, to []State, e Symbol), 0, total)
-	for _, callback := range b.exitStateCallbacks {
-		callbacks = append(callbacks, callback)
-	}
-	for _, callback := range b.exitCallbacks {
-		callbacks = append(callbacks, callback)
-	}
-	for _, callback := range b.stepAnyCallbacks {
-		callbacks = append(callbacks, callback)
-	}
-	for _, callback := range b.stepCallbacks {
-		callbacks = append(callbacks, callback)
-	}
-	for _, callback := range b.enterStateCallbacks {
-		callbacks = append(callbacks, callback)
-	}
-	for _, callback := range b.enterCallbacks {
-		callbacks = append(callbacks, callback)
+	configKeyer := newNFAConfigKeyer[State]()
+
+	var configGuard transitionhooks.GroupGuard[string]
+	if !b.selfTransitionCallbacks {
+		configGuard = func(fromKey string, toKey string) bool { return fromKey != toKey }
 	}
 
-	return transitionhooks.New[[]State, Symbol](b.exec, callbacks...), nil
+	exitStateRegistrations := make([]transitionhooks.Registration[[]State, Symbol, string], 0, len(b.exitStateCallbacks))
+	for _, callback := range b.exitStateCallbacks {
+		target := callback.target
+		exitStateCallback := callback.callback
+		exitStateRegistrations = append(exitStateRegistrations, transitionhooks.Registration[[]State, Symbol, string]{
+			Mode: transitionhooks.MatchPredicate,
+			Predicate: func(from []State, to []State, e Symbol) bool {
+				return stateSliceHasKey(from, target) && !stateSliceHasKey(to, target)
+			},
+			Callback: func(from []State, to []State, e Symbol) {
+				exitStateCallback(e)
+			},
+		})
+	}
+
+	exitConfigRegistrations := make([]transitionhooks.Registration[[]State, Symbol, string], 0, len(b.exitCallbacks))
+	for _, callback := range b.exitCallbacks {
+		exitConfigCallback := callback.callback
+		exitConfigRegistrations = append(exitConfigRegistrations, transitionhooks.Registration[[]State, Symbol, string]{
+			Mode:    transitionhooks.MatchFromKey,
+			FromKey: configKeyer.keyForStateKeys(callback.keys),
+			Callback: func(from []State, to []State, e Symbol) {
+				exitConfigCallback(e)
+			},
+		})
+	}
+
+	stepRegistrations := make([]transitionhooks.Registration[[]State, Symbol, string], 0, len(b.stepAnyCallbacks)+len(b.stepCallbacks))
+	for _, callback := range b.stepAnyCallbacks {
+		stepRegistrations = append(stepRegistrations, transitionhooks.Registration[[]State, Symbol, string]{
+			Mode:     transitionhooks.MatchAny,
+			Callback: callback,
+		})
+	}
+	for _, callback := range b.stepCallbacks {
+		stepCallback := callback.callback
+		stepRegistrations = append(stepRegistrations, transitionhooks.Registration[[]State, Symbol, string]{
+			Mode:    transitionhooks.MatchFromToKey,
+			FromKey: configKeyer.keyForStateKeys(callback.fromKeys),
+			ToKey:   configKeyer.keyForStateKeys(callback.toKeys),
+			Callback: func(from []State, to []State, e Symbol) {
+				stepCallback(e)
+			},
+		})
+	}
+
+	enterStateRegistrations := make([]transitionhooks.Registration[[]State, Symbol, string], 0, len(b.enterStateCallbacks))
+	for _, callback := range b.enterStateCallbacks {
+		target := callback.target
+		enterStateCallback := callback.callback
+		enterStateRegistrations = append(enterStateRegistrations, transitionhooks.Registration[[]State, Symbol, string]{
+			Mode: transitionhooks.MatchPredicate,
+			Predicate: func(from []State, to []State, e Symbol) bool {
+				return !stateSliceHasKey(from, target) && stateSliceHasKey(to, target)
+			},
+			Callback: func(from []State, to []State, e Symbol) {
+				enterStateCallback(e)
+			},
+		})
+	}
+
+	enterConfigRegistrations := make([]transitionhooks.Registration[[]State, Symbol, string], 0, len(b.enterCallbacks))
+	for _, callback := range b.enterCallbacks {
+		enterConfigCallback := callback.callback
+		enterConfigRegistrations = append(enterConfigRegistrations, transitionhooks.Registration[[]State, Symbol, string]{
+			Mode:  transitionhooks.MatchToKey,
+			ToKey: configKeyer.keyForStateKeys(callback.keys),
+			Callback: func(from []State, to []State, e Symbol) {
+				enterConfigCallback(e)
+			},
+		})
+	}
+
+	return transitionhooks.NewCompiled(
+		b.exec,
+		func(states []State) string { return configKeyer.keyForStates(states) },
+		transitionhooks.Group[[]State, Symbol, string]{
+			Registrations: exitStateRegistrations,
+		},
+		transitionhooks.Group[[]State, Symbol, string]{
+			Guard:         configGuard,
+			Registrations: exitConfigRegistrations,
+		},
+		transitionhooks.Group[[]State, Symbol, string]{
+			Registrations: stepRegistrations,
+		},
+		transitionhooks.Group[[]State, Symbol, string]{
+			Registrations: enterStateRegistrations,
+		},
+		transitionhooks.Group[[]State, Symbol, string]{
+			Guard:         configGuard,
+			Registrations: enterConfigRegistrations,
+		},
+	), nil
 }
 
 // BuildEngine wires the NFA and transition hooks into an Engine.
@@ -272,7 +341,7 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) BuildEngine() (*engine.
 	if err != nil {
 		return nil, err
 	}
-	return engine.NFA[State, Symbol](n).WithTransitionHooks(hooks).Build()
+	return engine.NFA(n).WithTransitionHooks(hooks).Build()
 }
 
 // BuildAtomicEngine wires the NFA and transition hooks into a thread-safe Engine.
@@ -289,7 +358,7 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) BuildAtomicEngine() (*e
 	if err != nil {
 		return nil, err
 	}
-	return engine.NFA[State, Symbol](n).WithTransitionHooks(hooks).BuildAtomic()
+	return engine.NFA(n).WithTransitionHooks(hooks).BuildAtomic()
 }
 
 // BuildRunner wires the NFA and transition hooks into an Engine-backed Runner.
@@ -301,11 +370,78 @@ func (b *NFABuilder[State, Symbol, StateKey, SymbolKey]) BuildRunner(buffer int)
 	return runner.New(e, buffer), nil
 }
 
-func stateSetToKeySet[State key.Keyer[StateKey], StateKey comparable](states []State) *set.Set[StateKey] {
+type nfaConfigKeyer[State key.Keyer[StateKey], StateKey comparable] struct {
+	ids  map[StateKey]uint32
+	next uint32
+}
+
+func newNFAConfigKeyer[State key.Keyer[StateKey], StateKey comparable]() *nfaConfigKeyer[State, StateKey] {
+	return &nfaConfigKeyer[State, StateKey]{
+		ids: make(map[StateKey]uint32),
+	}
+}
+
+func (k *nfaConfigKeyer[State, StateKey]) keyForStates(states []State) string {
 	keys := make([]StateKey, 0, len(states))
 	for _, state := range states {
 		keys = append(keys, state.Key())
 	}
-	out := set.New(keys...)
-	return out
+	return k.keyForStateKeys(keys)
+}
+
+func (k *nfaConfigKeyer[State, StateKey]) keyForStateKeys(keys []StateKey) string {
+	if len(keys) == 0 {
+		return ""
+	}
+
+	ids := make([]uint32, 0, len(keys))
+	seen := make(map[uint32]struct{}, len(keys))
+	for _, stateKey := range keys {
+		id, ok := k.ids[stateKey]
+		if !ok {
+			id = k.next
+			k.ids[stateKey] = id
+			k.next++
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+
+	sort.Slice(ids, func(i int, j int) bool { return ids[i] < ids[j] })
+	encoded := make([]byte, 0, len(ids)*4)
+	for _, id := range ids {
+		encoded = append(encoded,
+			byte(id>>24),
+			byte(id>>16),
+			byte(id>>8),
+			byte(id),
+		)
+	}
+	return string(encoded)
+}
+
+func stateSliceToUniqueKeys[State key.Keyer[StateKey], StateKey comparable](states []State) []StateKey {
+	keys := make([]StateKey, 0, len(states))
+	seen := make(map[StateKey]struct{}, len(states))
+	for _, state := range states {
+		stateKey := state.Key()
+		if _, ok := seen[stateKey]; ok {
+			continue
+		}
+		seen[stateKey] = struct{}{}
+		keys = append(keys, stateKey)
+	}
+	return keys
+}
+
+func stateSliceHasKey[State key.Keyer[StateKey], StateKey comparable](states []State, target StateKey) bool {
+	for _, state := range states {
+		if state.Key() == target {
+			return true
+		}
+	}
+	return false
 }
