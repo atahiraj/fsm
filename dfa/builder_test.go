@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stnhrsprkwns/fsm/graph"
+	"github.com/atahiraj/fsm/graph"
 )
 
 type bState int

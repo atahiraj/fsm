@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stnhrsprkwns/fsm/dfa"
+	"github.com/atahiraj/fsm/dfa"
 )
 
 type state int

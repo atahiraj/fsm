@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stnhrsprkwns/fsm/nfa"
+	"github.com/atahiraj/fsm/nfa"
 )
 
 type nstate int

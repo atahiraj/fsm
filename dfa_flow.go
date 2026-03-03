@@ -3,11 +3,11 @@ package fsm
 import (
 	"errors"
 
-	"github.com/stnhrsprkwns/fsm/dfa"
-	"github.com/stnhrsprkwns/fsm/engine"
-	"github.com/stnhrsprkwns/fsm/key"
-	"github.com/stnhrsprkwns/fsm/runner"
-	"github.com/stnhrsprkwns/fsm/transitionhooks"
+	"github.com/atahiraj/fsm/dfa"
+	"github.com/atahiraj/fsm/engine"
+	"github.com/atahiraj/fsm/key"
+	"github.com/atahiraj/fsm/runner"
+	"github.com/atahiraj/fsm/transitionhooks"
 )
 
 // DFAGraph is a minimal graph interface for DFA builders.

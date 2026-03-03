@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stnhrsprkwns/fsm/dfa"
-	"github.com/stnhrsprkwns/fsm/runner"
+	"github.com/atahiraj/fsm/dfa"
+	"github.com/atahiraj/fsm/runner"
 )
 
 type dfaState int

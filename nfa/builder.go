@@ -3,9 +3,9 @@ package nfa
 import (
 	"errors"
 
-	"github.com/stnhrsprkwns/fsm/graph"
-	"github.com/stnhrsprkwns/fsm/internal/set"
-	"github.com/stnhrsprkwns/fsm/key"
+	"github.com/atahiraj/fsm/graph"
+	"github.com/atahiraj/fsm/internal/set"
+	"github.com/atahiraj/fsm/key"
 )
 
 type keyGraphLike[StateKey comparable, InputKey comparable] interface {

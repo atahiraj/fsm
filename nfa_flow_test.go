@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	nfapkg "github.com/stnhrsprkwns/fsm/nfa"
-	"github.com/stnhrsprkwns/fsm/runner"
+	nfapkg "github.com/atahiraj/fsm/nfa"
+	"github.com/atahiraj/fsm/runner"
 )
 
 type nfaState int

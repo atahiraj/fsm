@@ -3,7 +3,7 @@ package dfa
 import (
 	"sync"
 
-	"github.com/stnhrsprkwns/fsm/key"
+	"github.com/atahiraj/fsm/key"
 )
 
 // AtomicDFA is a thread-safe wrapper around DFA.

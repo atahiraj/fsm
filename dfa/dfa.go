@@ -1,8 +1,8 @@
 package dfa
 
 import (
-	"github.com/stnhrsprkwns/fsm/internal/set"
-	"github.com/stnhrsprkwns/fsm/key"
+	"github.com/atahiraj/fsm/internal/set"
+	"github.com/atahiraj/fsm/key"
 )
 
 // Deltaer abstracts the DFA primitive transition function δ.
