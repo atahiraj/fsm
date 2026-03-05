@@ -3,228 +3,135 @@ package nfa
 import (
 	"errors"
 
-	"github.com/atahiraj/fsm/graph"
+	internalgraph "github.com/atahiraj/fsm/internal/graph"
 	"github.com/atahiraj/fsm/internal/set"
-	"github.com/atahiraj/fsm/key"
+	"github.com/atahiraj/fsm/internal/validate"
 )
 
-type keyGraphLike[StateKey comparable, InputKey comparable] interface {
-	Delta(from StateKey, label Label[InputKey]) []StateKey
-}
-
-type graphLike[State any, Input any] interface {
-	Delta(from State, input Input) []State
-	Epsilon(from State) []State
-}
-
-// BuildAtomic returns a thread-safe NFA backed by the builder's graph.
-func (b *Builder[State, Input, StateKey, InputKey]) BuildAtomic() (*AtomicNFA[State, Input, StateKey, InputKey], error) {
-	n, err := b.Build()
-	if err != nil {
-		return nil, err
-	}
-	return NewAtomic(n), nil
-}
-
-type graphDeltaer[StateKey comparable, InputKey comparable] struct {
-	g keyGraphLike[StateKey, InputKey]
-}
-
-func (d graphDeltaer[StateKey, InputKey]) Delta(state StateKey, input InputKey) []StateKey {
-	return d.g.Delta(state, Sym(input))
-}
-
-func (d graphDeltaer[StateKey, InputKey]) Epsilon(state StateKey) []StateKey {
-	return d.g.Delta(state, Epsilon[InputKey]())
-}
-
-type valueGraphDeltaer[State key.Keyer[StateKey], Input key.Keyer[InputKey], StateKey comparable, InputKey comparable] struct {
-	g          graphLike[State, Input]
+// Builder incrementally constructs a validated NFA.
+type Builder[State, Input any, StateKey, InputKey comparable] struct {
+	stateKey   func(State) StateKey
+	inputKey   func(Input) InputKey
+	states     *set.Set[StateKey]
+	alphabet   *set.Set[InputKey]
+	accepting  *set.Set[StateKey]
 	stateByKey map[StateKey]State
-	symByKey   map[InputKey]Input
+	inputByKey map[InputKey]Input
+	start      State
+	hasStart   bool
+	table      *internalgraph.Nondeterministic[State, Input, StateKey, InputKey]
+	injected   Graph[State, Input]
+	hasEdges   bool
 }
 
-func (d valueGraphDeltaer[State, Input, StateKey, InputKey]) Delta(state StateKey, input InputKey) []StateKey {
-	from, ok := d.stateByKey[state]
-	if !ok {
-		return nil
+// NewBuilder constructs an empty builder with injected identity functions.
+func NewBuilder[State, Input any, StateKey, InputKey comparable](stateKey func(State) StateKey, inputKey func(Input) InputKey) (*Builder[State, Input, StateKey, InputKey], error) {
+	if stateKey == nil {
+		return nil, errors.New("nfa builder: state key function is nil")
 	}
-	label, ok := d.symByKey[input]
-	if !ok {
-		return nil
+	if inputKey == nil {
+		return nil, errors.New("nfa builder: input key function is nil")
 	}
-	next := d.g.Delta(from, label)
-	out := make([]StateKey, 0, len(next))
-	for _, to := range next {
-		out = append(out, to.Key())
-	}
-	return out
-}
-
-func (d valueGraphDeltaer[State, Input, StateKey, InputKey]) Epsilon(state StateKey) []StateKey {
-	from, ok := d.stateByKey[state]
-	if !ok {
-		return nil
-	}
-	next := d.g.Epsilon(from)
-	out := make([]StateKey, 0, len(next))
-	for _, to := range next {
-		out = append(out, to.Key())
-	}
-	return out
-}
-
-// Label represents an input input key or ε for graph-backed NFAs.
-type Label[InputKey comparable] struct {
-	Input     InputKey
-	IsEpsilon bool
-}
-
-// Sym constructs a label for a concrete input key.
-func Sym[InputKey comparable](input InputKey) Label[InputKey] {
-	return Label[InputKey]{Input: input}
-}
-
-// Epsilon constructs a label for ε.
-func Epsilon[InputKey comparable]() Label[InputKey] {
-	return Label[InputKey]{IsEpsilon: true}
-}
-
-// Builder constructs an NFA from (Q, Σ, δ, q₀, F) using a graph backend.
-type Builder[State key.Keyer[StateKey], Input key.Keyer[InputKey], StateKey comparable, InputKey comparable] struct {
-	g         *graph.Graph[StateKey, Label[InputKey]]
-	gLike     graphLike[State, Input]
-	states    set.Set[StateKey] // Q
-	alphabet  set.Set[InputKey] // Σ
-	start     State             // q₀
-	accepting set.Set[StateKey] // F
-
-	stateByKey map[StateKey]State
-	symByKey   map[InputKey]Input
-}
-
-// NewBuilder creates an empty NFA builder.
-func NewBuilder[State key.Keyer[StateKey], Input key.Keyer[InputKey], StateKey comparable, InputKey comparable]() *Builder[State, Input, StateKey, InputKey] {
 	return &Builder[State, Input, StateKey, InputKey]{
-		g:          graph.New[StateKey, Label[InputKey]](),
+		stateKey:   stateKey,
+		inputKey:   inputKey,
+		states:     set.New[StateKey](),
+		alphabet:   set.New[InputKey](),
+		accepting:  set.New[StateKey](),
 		stateByKey: make(map[StateKey]State),
-		symByKey:   make(map[InputKey]Input),
-	}
-}
-
-// SetStart sets q₀, the start state.
-func (b *Builder[State, Input, StateKey, InputKey]) SetStart(state State) {
-	b.start = state
-	key := state.Key()
-	b.stateByKey[key] = state
-	b.states.Add(key)
+		inputByKey: make(map[InputKey]Input),
+		table:      internalgraph.NewNondeterministic(stateKey, inputKey),
+	}, nil
 }
 
 // AddStates inserts states into Q.
 func (b *Builder[State, Input, StateKey, InputKey]) AddStates(states ...State) {
 	for _, state := range states {
-		key := state.Key()
-		b.stateByKey[key] = state
+		key := b.stateKey(state)
 		b.states.Add(key)
+		b.stateByKey[key] = state
+		b.table.AddVertex(state)
 	}
 }
 
 // AddAlphabet inserts inputs into Σ.
 func (b *Builder[State, Input, StateKey, InputKey]) AddAlphabet(inputs ...Input) {
 	for _, input := range inputs {
-		key := input.Key()
-		b.symByKey[key] = input
+		key := b.inputKey(input)
 		b.alphabet.Add(key)
+		b.inputByKey[key] = input
 	}
 }
 
-// AddAccepting inserts states into F.
+// SetStart sets q₀ and adds it to Q.
+func (b *Builder[State, Input, StateKey, InputKey]) SetStart(state State) {
+	b.AddStates(state)
+	b.start = state
+	b.hasStart = true
+}
+
+// AddAccepting inserts states into F and Q.
 func (b *Builder[State, Input, StateKey, InputKey]) AddAccepting(states ...State) {
+	b.AddStates(states...)
 	for _, state := range states {
-		key := state.Key()
-		b.stateByKey[key] = state
-		b.accepting.Add(key)
-		b.states.Add(key)
+		b.accepting.Add(b.stateKey(state))
 	}
 }
 
-// WithGraph replaces the builder's graph for Build and shares it.
-// Preconditions: g is non-nil.
-func (b *Builder[State, Input, StateKey, InputKey]) WithGraph(g graphLike[State, Input]) *Builder[State, Input, StateKey, InputKey] {
-	b.gLike = g
-	return b
-}
-
-// Transition inserts (from, a, to) into δ.
-func (b *Builder[State, Input, StateKey, InputKey]) Transition(from State, input Input, to State) {
-	inputKey := input.Key()
-	b.TransitionKey(from, inputKey, to)
-	b.symByKey[inputKey] = input
-}
-
-// TransitionKey inserts (from, a, to) into δ using only the input key.
-func (b *Builder[State, Input, StateKey, InputKey]) TransitionKey(from State, inputKey InputKey, to State) {
-	fromKey := from.Key()
-	toKey := to.Key()
-
-	b.stateByKey[fromKey] = from
-	b.stateByKey[toKey] = to
-
-	b.states.Add(fromKey, toKey)
-	b.alphabet.Add(inputKey)
-	b.g.AddEdge(fromKey, toKey, Sym(inputKey))
-}
-
-// Epsilon inserts (from, ε, to) into δ.
-func (b *Builder[State, Input, StateKey, InputKey]) Epsilon(from State, to State) {
-	fromKey := from.Key()
-	toKey := to.Key()
-
-	b.stateByKey[fromKey] = from
-	b.stateByKey[toKey] = to
-	b.states.Add(fromKey, toKey)
-	b.g.AddEdge(fromKey, toKey, Epsilon[InputKey]())
-}
-
-func valuesFromKeys[K comparable, V any](keys []K, byKey map[K]V) []V {
-	out := make([]V, 0, len(keys))
-	for _, key := range keys {
-		if value, ok := byKey[key]; ok {
-			out = append(out, value)
-		}
+// WithGraph injects the complete transition relation.
+//
+// The graph is shared with the built NFA. WithGraph cannot be mixed with
+// transitions added through this builder.
+func (b *Builder[State, Input, StateKey, InputKey]) WithGraph(graph Graph[State, Input]) error {
+	if validate.IsNil(graph) {
+		return errors.New("nfa builder: graph is nil")
 	}
-	return out
+	if b.hasEdges {
+		return ErrMixedGraph
+	}
+	b.injected = graph
+	return nil
 }
 
-// Build returns an NFA with δ backed by the builder's graph.
-// Returns an error if the graph is missing.
+// AddTransition inserts a transition and its states/input into Q and Σ.
+func (b *Builder[State, Input, StateKey, InputKey]) AddTransition(from State, input Input, to State) error {
+	if b.injected != nil {
+		return ErrMixedGraph
+	}
+	b.AddStates(from, to)
+	b.AddAlphabet(input)
+	b.hasEdges = true
+	b.table.AddTransition(from, input, to)
+	return nil
+}
+
+// AddEpsilon inserts an epsilon transition and its states into Q.
+func (b *Builder[State, Input, StateKey, InputKey]) AddEpsilon(from, to State) error {
+	if b.injected != nil {
+		return ErrMixedGraph
+	}
+	b.AddStates(from, to)
+	b.hasEdges = true
+	b.table.AddEpsilon(from, to)
+	return nil
+}
+
+// Build validates the definition and returns an NFA.
 func (b *Builder[State, Input, StateKey, InputKey]) Build() (*NFA[State, Input, StateKey, InputKey], error) {
-	if b.gLike == nil && b.g == nil {
-		return nil, errors.New("nfa builder: graph is nil")
+	if !b.hasStart {
+		return nil, errors.New("nfa builder: start state is not set")
 	}
-	if b.gLike != nil {
-		if b.states.Len() == 0 {
-			return nil, errors.New("nfa builder: WithGraph requires states; add Q with AddStates")
-		}
-		if b.alphabet.Len() == 0 {
-			return nil, errors.New("nfa builder: WithGraph requires alphabet; add Σ with AddAlphabet")
-		}
+	graph := b.injected
+	if graph == nil {
+		graph = b.table.Clone()
 	}
-
-	var delta Deltaer[StateKey, InputKey] = graphDeltaer[StateKey, InputKey]{g: b.g}
-	if b.gLike != nil {
-		delta = valueGraphDeltaer[State, Input, StateKey, InputKey]{
-			g:          b.gLike,
-			stateByKey: b.stateByKey,
-			symByKey:   b.symByKey,
-		}
-	}
-
 	return New(Config[State, Input, StateKey, InputKey]{
-		States:    valuesFromKeys(b.states.Clone().Slice(), b.stateByKey),
-		Alphabet:  valuesFromKeys(b.alphabet.Clone().Slice(), b.symByKey),
+		States:    nfaValues(b.states.Slice(), b.stateByKey),
+		Alphabet:  nfaValues(b.alphabet.Slice(), b.inputByKey),
 		Start:     b.start,
-		Accepting: valuesFromKeys(b.accepting.Clone().Slice(), b.stateByKey),
-		Deltaer:   delta,
-	}), nil
+		Accepting: nfaValues(b.accepting.Slice(), b.stateByKey),
+		Graph:     graph,
+		StateKey:  b.stateKey,
+		InputKey:  b.inputKey,
+	})
 }

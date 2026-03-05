@@ -1,199 +1,328 @@
 package dfa
 
 import (
+	"errors"
+	"fmt"
+
+	internalgraph "github.com/atahiraj/fsm/internal/graph"
 	"github.com/atahiraj/fsm/internal/set"
-	"github.com/atahiraj/fsm/key"
+	"github.com/atahiraj/fsm/internal/validate"
 )
 
-// Deltaer abstracts the DFA primitive transition function δ.
-//
-// δ : Q × Σ → Q
-//
-// Q and Σ are represented by comparable keys.
-type Deltaer[StateKey comparable, InputKey comparable] interface {
-	Delta(state StateKey, input InputKey) (StateKey, bool)
+var (
+	// ErrReadOnlyGraph reports that a graph does not support mutation.
+	ErrReadOnlyGraph = errors.New("dfa: graph is read-only")
+	// ErrTransitionExists reports a conflicting deterministic transition.
+	ErrTransitionExists = errors.New("dfa: transition already exists")
+	// ErrMixedGraph reports that builder-owned and injected transitions were mixed.
+	ErrMixedGraph = errors.New("dfa: cannot mix an injected graph with builder transitions")
+)
+
+// Graph supplies the deterministic transition function over domain values.
+type Graph[State, Input any] interface {
+	Delta(State, Input) (State, bool)
 }
 
-// DeltaFunc adapts a plain function to a Deltaer.
-type DeltaFunc[StateKey comparable, InputKey comparable] func(state StateKey, input InputKey) (StateKey, bool)
+// MutableGraph is a Graph that supports transition edits.
+type MutableGraph[State, Input any] interface {
+	Graph[State, Input]
+	AddTransition(State, Input, State) error
+	RemoveTransition(State, Input) bool
+}
 
-func (f DeltaFunc[StateKey, InputKey]) Delta(state StateKey, input InputKey) (StateKey, bool) {
+// GraphFunc adapts a function to Graph.
+type GraphFunc[State, Input any] func(State, Input) (State, bool)
+
+// Delta calls f.
+func (f GraphFunc[State, Input]) Delta(state State, input Input) (State, bool) {
+	if f == nil {
+		var zero State
+		return zero, false
+	}
 	return f(state, input)
 }
 
-// DFA models a deterministic finite automaton.
-//
-// The field Deltaer holds the primitive δ over keys.
-type DFA[State key.Keyer[StateKey], Input key.Keyer[InputKey], StateKey comparable, InputKey comparable] struct {
-	states     set.Set[StateKey]           // Q, all state keys.
-	alphabet   set.Set[InputKey]           // Σ, all input keys.
-	deltaer    Deltaer[StateKey, InputKey] // δ, primitive transition over keys.
-	start      State                       // q₀, start state value.
-	accepting  set.Set[StateKey]           // F, accepting state keys.
-	stateByKey map[StateKey]State
-	symByKey   map[InputKey]Input
-}
-
-// Config holds the data needed to construct a DFA (Q, Σ, δ, q₀, F).
-type Config[State key.Keyer[StateKey], Input key.Keyer[InputKey], StateKey comparable, InputKey comparable] struct {
-	// States is Q, the set of all states.
-	States []State
-	// Alphabet is Σ, the input alphabet.
-	Alphabet []Input
-	// Start is q₀, the start state.
-	Start State
-	// Accepting is F, the accepting states.
+// Config describes a deterministic finite automaton (Q, Σ, δ, q₀, F).
+type Config[State, Input any, StateKey, InputKey comparable] struct {
+	States    []State
+	Alphabet  []Input
+	Start     State
 	Accepting []State
-	// Deltaer provides δ, the primitive transition function over keys.
-	Deltaer Deltaer[StateKey, InputKey]
+	Graph     Graph[State, Input]
+	StateKey  func(State) StateKey
+	InputKey  func(Input) InputKey
 }
 
-// New constructs a DFA from (Q, Σ, δ, q₀, F).
-func New[State key.Keyer[StateKey], Input key.Keyer[InputKey], StateKey comparable, InputKey comparable](cfg Config[State, Input, StateKey, InputKey]) *DFA[State, Input, StateKey, InputKey] {
-	d := &DFA[State, Input, StateKey, InputKey]{
-		deltaer:    cfg.Deltaer,
-		start:      cfg.Start,
-		stateByKey: make(map[StateKey]State, len(cfg.States)),
-		symByKey:   make(map[InputKey]Input, len(cfg.Alphabet)),
+// DFA is a mutable deterministic finite automaton.
+//
+// It retains an injected graph by reference and is not safe for concurrent use.
+type DFA[State, Input any, StateKey, InputKey comparable] struct {
+	graph      Graph[State, Input]
+	stateKey   func(State) StateKey
+	inputKey   func(Input) InputKey
+	states     *set.Set[StateKey]
+	alphabet   *set.Set[InputKey]
+	accepting  *set.Set[StateKey]
+	stateByKey map[StateKey]State
+	inputByKey map[InputKey]Input
+	startKey   StateKey
+}
+
+// New validates config and constructs a DFA.
+func New[State, Input any, StateKey, InputKey comparable](config Config[State, Input, StateKey, InputKey]) (*DFA[State, Input, StateKey, InputKey], error) {
+	if config.StateKey == nil {
+		return nil, errors.New("dfa: state key function is nil")
 	}
-	d.AddStates(cfg.States...)
-	d.AddAlphabet(cfg.Alphabet...)
-	d.AddAccepting(cfg.Accepting...)
-	return d
+	if config.InputKey == nil {
+		return nil, errors.New("dfa: input key function is nil")
+	}
+	if validate.IsNil(config.Graph) {
+		return nil, errors.New("dfa: graph is nil")
+	}
+	if len(config.States) == 0 {
+		return nil, errors.New("dfa: state set is empty")
+	}
+
+	d := &DFA[State, Input, StateKey, InputKey]{
+		graph:      config.Graph,
+		stateKey:   config.StateKey,
+		inputKey:   config.InputKey,
+		states:     set.New[StateKey](),
+		alphabet:   set.New[InputKey](),
+		accepting:  set.New[StateKey](),
+		stateByKey: make(map[StateKey]State, len(config.States)),
+		inputByKey: make(map[InputKey]Input, len(config.Alphabet)),
+	}
+	for _, state := range config.States {
+		d.AddState(state)
+	}
+	for _, input := range config.Alphabet {
+		d.AddInput(input)
+	}
+	if err := d.SetStart(config.Start); err != nil {
+		return nil, fmt.Errorf("dfa: invalid start state: %w", err)
+	}
+	for _, state := range config.Accepting {
+		if err := d.AddAccepting(state); err != nil {
+			return nil, fmt.Errorf("dfa: invalid accepting state: %w", err)
+		}
+	}
+	return d, nil
 }
 
-// Delta applies δ(s, a).
-func (d *DFA[State, Input, StateKey, InputKey]) Delta(s State, a Input) (State, bool) {
+// Initial returns q₀ and implements fsm.Machine.
+func (d *DFA[State, Input, StateKey, InputKey]) Initial() State {
+	return d.stateByKey[d.startKey]
+}
+
+// Start returns q₀.
+func (d *DFA[State, Input, StateKey, InputKey]) Start() State { return d.Initial() }
+
+// Equal reports whether two state values have the same identity.
+func (d *DFA[State, Input, StateKey, InputKey]) Equal(left, right State) bool {
+	return d.stateKey(left) == d.stateKey(right)
+}
+
+// Delta applies δ to a state and input.
+func (d *DFA[State, Input, StateKey, InputKey]) Delta(state State, input Input) (State, bool) {
 	var zero State
-	nextKey, ok := d.deltaer.Delta(s.Key(), a.Key())
-	if !ok || !d.states.Has(nextKey) {
+	if !d.HasState(state) || !d.HasInput(input) {
 		return zero, false
 	}
-	next, ok := d.stateByKey[nextKey]
+	next, ok := d.graph.Delta(state, input)
 	if !ok {
 		return zero, false
 	}
-	return next, true
+	canonical, ok := d.stateByKey[d.stateKey(next)]
+	if !ok {
+		return zero, false
+	}
+	return canonical, true
 }
 
-// DeltaStar applies δ repeatedly over a word (sequence of inputs).
-func (d *DFA[State, Input, StateKey, InputKey]) DeltaStar(s State, word []Input) (State, bool) {
-	cur := s
-	for _, a := range word {
-		next, ok := d.Delta(cur, a)
+// Transition applies δ and implements fsm.Machine.
+func (d *DFA[State, Input, StateKey, InputKey]) Transition(state State, input Input) (State, bool) {
+	return d.Delta(state, input)
+}
+
+// DeltaStar applies δ repeatedly over a word.
+func (d *DFA[State, Input, StateKey, InputKey]) DeltaStar(state State, word []Input) (State, bool) {
+	current := state
+	for _, input := range word {
+		next, ok := d.Delta(current, input)
 		if !ok {
 			var zero State
 			return zero, false
 		}
-		cur = next
+		current = next
 	}
-	return cur, true
+	return current, true
 }
 
-// IsAccepting reports whether s ∈ F.
-func (d *DFA[State, Input, StateKey, InputKey]) IsAccepting(s State) bool {
-	return d.accepting.Has(s.Key())
-}
-
-// Accepts reports whether the DFA accepts the given word.
+// Accepts reports whether word ends in an accepting state.
 func (d *DFA[State, Input, StateKey, InputKey]) Accepts(word []Input) bool {
-	end, ok := d.DeltaStar(d.start, word)
-	return ok && d.IsAccepting(end)
+	state, ok := d.DeltaStar(d.Initial(), word)
+	return ok && d.IsAccepting(state)
 }
 
-// States returns Q, the set of all states.
+// IsAccepting reports whether state belongs to F.
+func (d *DFA[State, Input, StateKey, InputKey]) IsAccepting(state State) bool {
+	return d.accepting.Has(d.stateKey(state))
+}
+
+func values[K comparable, V any](keys []K, byKey map[K]V) []V {
+	out := make([]V, 0, len(keys))
+	for _, key := range keys {
+		if value, ok := byKey[key]; ok {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+// States returns Q in insertion order.
 func (d *DFA[State, Input, StateKey, InputKey]) States() []State {
-	keys := d.states.Clone().Slice()
-	out := make([]State, 0, len(keys))
-	for _, key := range keys {
-		if state, ok := d.stateByKey[key]; ok {
-			out = append(out, state)
-		}
-	}
-	return out
+	return values(d.states.Slice(), d.stateByKey)
 }
 
-// Alphabet returns Σ, the input alphabet.
+// Alphabet returns Σ in insertion order.
 func (d *DFA[State, Input, StateKey, InputKey]) Alphabet() []Input {
-	keys := d.alphabet.Clone().Slice()
-	out := make([]Input, 0, len(keys))
-	for _, key := range keys {
-		if sym, ok := d.symByKey[key]; ok {
-			out = append(out, sym)
-		}
-	}
-	return out
+	return values(d.alphabet.Slice(), d.inputByKey)
 }
 
-// Start returns q₀, the start state.
-func (d *DFA[State, Input, StateKey, InputKey]) Start() State {
-	return d.start
-}
-
-// Accepting returns F, the set of accepting states.
+// Accepting returns F in insertion order.
 func (d *DFA[State, Input, StateKey, InputKey]) Accepting() []State {
-	keys := d.accepting.Clone().Slice()
-	out := make([]State, 0, len(keys))
-	for _, key := range keys {
-		if state, ok := d.stateByKey[key]; ok {
-			out = append(out, state)
-		}
-	}
-	return out
+	return values(d.accepting.Slice(), d.stateByKey)
 }
 
-// SetDeltaer sets δ, the primitive transition function.
-func (d *DFA[State, Input, StateKey, InputKey]) SetDeltaer(deltaer Deltaer[StateKey, InputKey]) {
-	d.deltaer = deltaer
+// Graph returns the currently injected transition graph.
+func (d *DFA[State, Input, StateKey, InputKey]) Graph() Graph[State, Input] {
+	return d.graph
 }
 
-// SetStart sets q₀, the start state.
-func (d *DFA[State, Input, StateKey, InputKey]) SetStart(state State) {
-	d.start = state
-}
-
-// AddStates inserts states into Q.
-func (d *DFA[State, Input, StateKey, InputKey]) AddStates(states ...State) {
-	for _, state := range states {
-		key := state.Key()
-		d.states.Add(key)
-		d.stateByKey[key] = state
-	}
-}
-
-// AddAlphabet inserts inputs into Σ.
-func (d *DFA[State, Input, StateKey, InputKey]) AddAlphabet(inputs ...Input) {
-	for _, sym := range inputs {
-		key := sym.Key()
-		d.alphabet.Add(key)
-		d.symByKey[key] = sym
-	}
-}
-
-// AddAccepting inserts states into F.
-func (d *DFA[State, Input, StateKey, InputKey]) AddAccepting(states ...State) {
-	for _, state := range states {
-		key := state.Key()
-		d.accepting.Add(key)
-		d.stateByKey[key] = state
-	}
-}
-
-// RemoveAccepting removes states from F.
-func (d *DFA[State, Input, StateKey, InputKey]) RemoveAccepting(states ...State) {
-	keys := make([]StateKey, 0, len(states))
-	for _, state := range states {
-		keys = append(keys, state.Key())
-	}
-	d.accepting.Remove(keys...)
-}
-
-// HasState reports whether state ∈ Q.
+// HasState reports whether state belongs to Q.
 func (d *DFA[State, Input, StateKey, InputKey]) HasState(state State) bool {
-	return d.states.Has(state.Key())
+	return d.states.Has(d.stateKey(state))
 }
 
-// HasInput reports whether input ∈ Σ.
+// HasInput reports whether input belongs to Σ.
 func (d *DFA[State, Input, StateKey, InputKey]) HasInput(input Input) bool {
-	return d.alphabet.Has(input.Key())
+	return d.alphabet.Has(d.inputKey(input))
+}
+
+// AddState inserts or replaces a state value by identity.
+func (d *DFA[State, Input, StateKey, InputKey]) AddState(state State) bool {
+	key := d.stateKey(state)
+	added := d.states.Add(key)
+	d.stateByKey[key] = state
+	return added
+}
+
+// RemoveState removes a non-start state and its accepting status.
+func (d *DFA[State, Input, StateKey, InputKey]) RemoveState(state State) (bool, error) {
+	key := d.stateKey(state)
+	if key == d.startKey {
+		return false, errors.New("dfa: cannot remove the start state")
+	}
+	if !d.states.Remove(key) {
+		return false, nil
+	}
+	d.accepting.Remove(key)
+	delete(d.stateByKey, key)
+	return true, nil
+}
+
+// AddInput inserts or replaces an input value by identity.
+func (d *DFA[State, Input, StateKey, InputKey]) AddInput(input Input) bool {
+	key := d.inputKey(input)
+	added := d.alphabet.Add(key)
+	d.inputByKey[key] = input
+	return added
+}
+
+// RemoveInput removes an input from Σ.
+func (d *DFA[State, Input, StateKey, InputKey]) RemoveInput(input Input) bool {
+	key := d.inputKey(input)
+	if !d.alphabet.Remove(key) {
+		return false
+	}
+	delete(d.inputByKey, key)
+	return true
+}
+
+// SetStart changes q₀. State must already belong to Q.
+func (d *DFA[State, Input, StateKey, InputKey]) SetStart(state State) error {
+	key := d.stateKey(state)
+	if !d.states.Has(key) {
+		return errors.New("state is not in Q")
+	}
+	d.startKey = key
+	return nil
+}
+
+// AddAccepting inserts state into F. State must already belong to Q.
+func (d *DFA[State, Input, StateKey, InputKey]) AddAccepting(state State) error {
+	key := d.stateKey(state)
+	if !d.states.Has(key) {
+		return errors.New("state is not in Q")
+	}
+	d.accepting.Add(key)
+	return nil
+}
+
+// RemoveAccepting removes state from F.
+func (d *DFA[State, Input, StateKey, InputKey]) RemoveAccepting(state State) bool {
+	return d.accepting.Remove(d.stateKey(state))
+}
+
+// SetGraph replaces δ and retains graph by reference.
+func (d *DFA[State, Input, StateKey, InputKey]) SetGraph(graph Graph[State, Input]) error {
+	if validate.IsNil(graph) {
+		return errors.New("dfa: graph is nil")
+	}
+	d.graph = graph
+	return nil
+}
+
+func (d *DFA[State, Input, StateKey, InputKey]) validateTransition(from State, input Input, to *State) error {
+	if !d.HasState(from) {
+		return errors.New("dfa: transition source is not in Q")
+	}
+	if !d.HasInput(input) {
+		return errors.New("dfa: transition input is not in Σ")
+	}
+	if to != nil && !d.HasState(*to) {
+		return errors.New("dfa: transition destination is not in Q")
+	}
+	return nil
+}
+
+// AddTransition adds a transition when the graph is mutable.
+func (d *DFA[State, Input, StateKey, InputKey]) AddTransition(from State, input Input, to State) error {
+	if err := d.validateTransition(from, input, &to); err != nil {
+		return err
+	}
+	graph, ok := d.graph.(MutableGraph[State, Input])
+	if !ok {
+		return ErrReadOnlyGraph
+	}
+	if err := graph.AddTransition(from, input, to); err != nil {
+		if errors.Is(err, ErrTransitionExists) || errors.Is(err, internalgraph.ErrTransitionExists) {
+			return fmt.Errorf("%w: (%v, %v)", ErrTransitionExists, from, input)
+		}
+		return err
+	}
+	return nil
+}
+
+// RemoveTransition removes a transition when the graph is mutable.
+func (d *DFA[State, Input, StateKey, InputKey]) RemoveTransition(from State, input Input) (bool, error) {
+	if err := d.validateTransition(from, input, nil); err != nil {
+		return false, err
+	}
+	graph, ok := d.graph.(MutableGraph[State, Input])
+	if !ok {
+		return false, ErrReadOnlyGraph
+	}
+	return graph.RemoveTransition(from, input), nil
 }

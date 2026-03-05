@@ -1,252 +1,197 @@
+// Package set provides a small insertion-ordered set for the public automata.
 package set
 
-// Set is a generic hash set backed by map[T]struct{}.
-// Use New() to obtain a mutable set.
-type Set[T comparable] struct{ m map[T]struct{} }
+// Set is an insertion-ordered set. Its zero value is ready for use.
+type Set[T comparable] struct {
+	values map[T]struct{}
+	order  []T
+}
 
-// New constructs a Set containing elems.
-func New[T comparable](elems ...T) *Set[T] {
-	s := newWithHint[T](len(elems))
-	for _, e := range elems {
-		s.m[e] = struct{}{}
-	}
+// New constructs a set containing values in first-insertion order.
+func New[T comparable](values ...T) *Set[T] {
+	s := &Set[T]{}
+	s.Add(values...)
 	return s
 }
 
-func newWithHint[T comparable](hint int) *Set[T] {
-	return &Set[T]{m: make(map[T]struct{}, hint)}
-}
-
-// Add inserts each x into the set. Duplicates are ignored.
-// Returns true if any new elements were added.
-// On a nil receiver, it is a no-op and returns false.
-func (s *Set[T]) Add(xs ...T) bool {
-	if s.m == nil {
-		s.m = make(map[T]struct{}, len(xs))
-	}
-	before := len(s.m)
-	for _, x := range xs {
-		s.m[x] = struct{}{}
-	}
-	return before != len(s.m)
-}
-
-// Remove deletes each x from the set. Missing values are ignored.
-// Returns true if any elements were removed.
-// On a nil receiver, it is a no-op and returns false.
-func (s *Set[T]) Remove(xs ...T) bool {
-	if len(s.m) == 0 {
+// Add inserts values and reports whether the set changed.
+func (s *Set[T]) Add(values ...T) bool {
+	if s == nil {
 		return false
 	}
-	before := len(s.m)
-	for _, x := range xs {
-		delete(s.m, x)
+	if s.values == nil {
+		s.values = make(map[T]struct{}, len(values))
 	}
-	return before != len(s.m)
+	changed := false
+	for _, value := range values {
+		if _, exists := s.values[value]; exists {
+			continue
+		}
+		s.values[value] = struct{}{}
+		s.order = append(s.order, value)
+		changed = true
+	}
+	return changed
 }
 
-// AddSet inserts into s every element from o.
-// Returns true if any new elements were added.
-// On a nil receiver, it is a no-op and returns false.
-// A nil o is treated as empty.
-func (s *Set[T]) AddSet(o *Set[T]) bool {
-	if o == nil || len(o.m) == 0 {
+// Remove removes values and reports whether the set changed.
+func (s *Set[T]) Remove(values ...T) bool {
+	if s == nil || len(s.values) == 0 {
 		return false
 	}
-	if s.m == nil {
-		s.m = make(map[T]struct{}, len(o.m))
+	changed := false
+	for _, value := range values {
+		if _, exists := s.values[value]; !exists {
+			continue
+		}
+		delete(s.values, value)
+		changed = true
 	}
-	before := len(s.m)
-	for k := range o.m {
-		s.m[k] = struct{}{}
+	if changed {
+		order := s.order[:0]
+		for _, value := range s.order {
+			if s.Has(value) {
+				order = append(order, value)
+			}
+		}
+		s.order = order
 	}
-	return before != len(s.m)
+	return changed
 }
 
-// RemoveSet deletes from s every element that appears in o.
-// Returns true if any elements were removed.
-// On a nil receiver, it is a no-op and returns false.
-// A nil o is treated as empty.
-func (s *Set[T]) RemoveSet(o *Set[T]) bool {
-	if len(s.m) == 0 || o == nil || len(o.m) == 0 {
+// Has reports whether value belongs to the set.
+func (s *Set[T]) Has(value T) bool {
+	if s == nil {
 		return false
 	}
-	before := len(s.m)
-	for k := range o.m {
-		delete(s.m, k)
-	}
-	return before != len(s.m)
+	_, exists := s.values[value]
+	return exists
 }
 
-// Has reports whether x is in the set.
-// Safe on a nil receiver (returns false).
-func (s *Set[T]) Has(x T) bool {
-	_, ok := s.m[x]
-	return ok
-}
-
-// Len returns the number of elements in the set.
-// Safe on a nil receiver (returns 0).
+// Len returns the number of values in the set.
 func (s *Set[T]) Len() int {
-	return len(s.m)
+	if s == nil {
+		return 0
+	}
+	return len(s.values)
 }
-
-// Cardinality of Len.
-func (s *Set[T]) Cardinality() int { return s.Len() }
 
 // IsEmpty reports whether the set is empty.
-// Safe on a nil receiver (returns true).
-func (s *Set[T]) IsEmpty() bool {
-	return len(s.m) == 0
-}
+func (s *Set[T]) IsEmpty() bool { return s.Len() == 0 }
 
-// Clear removes all elements from the set.
-// On a nil receiver, it is a no-op.
+// Clear removes every value.
 func (s *Set[T]) Clear() {
-	clear(s.m)
+	if s == nil {
+		return
+	}
+	clear(s.values)
+	s.order = nil
 }
 
-// Equals reports whether the set is equal to another set.
-// Nil receivers/args are treated as empty.
-func (s *Set[T]) Equals(o *Set[T]) bool {
-	lns := 0
-	if s != nil {
-		lns = len(s.m)
+// Slice returns an independent slice in insertion order.
+func (s *Set[T]) Slice() []T {
+	if s == nil || len(s.values) == 0 {
+		return []T{}
 	}
-	lno := 0
-	if o != nil {
-		lno = len(o.m)
+	out := make([]T, 0, len(s.values))
+	for _, value := range s.order {
+		if s.Has(value) {
+			out = append(out, value)
+		}
 	}
-	if lns != lno {
+	return out
+}
+
+// Clone returns an independent copy preserving insertion order.
+func (s *Set[T]) Clone() *Set[T] {
+	if s == nil {
+		return New[T]()
+	}
+	return New(s.Slice()...)
+}
+
+// Equals reports whether two sets contain the same values.
+func (s *Set[T]) Equals(other *Set[T]) bool {
+	if s.Len() != other.Len() {
 		return false
 	}
-	if lns == 0 { // both empty
-		return true
-	}
-	// s and o non-nil with same length
-	for x := range s.m {
-		if _, ok := o.m[x]; !ok {
+	for _, value := range s.Slice() {
+		if !other.Has(value) {
 			return false
 		}
 	}
 	return true
 }
 
-// Intersects reports whether two sets share at least one element.
-// Nil receivers/args are treated as empty.
-func (s *Set[T]) Intersects(o *Set[T]) bool {
-	if o == nil || len(s.m) == 0 || len(o.m) == 0 {
+// Intersects reports whether two sets share a value.
+func (s *Set[T]) Intersects(other *Set[T]) bool {
+	if s == nil || other == nil {
 		return false
 	}
-	a, b := s, o
-	if len(b.m) < len(a.m) {
-		a, b = b, a
-	}
-	for x := range a.m {
-		if _, ok := b.m[x]; ok {
+	for _, value := range s.Slice() {
+		if other.Has(value) {
 			return true
 		}
 	}
 	return false
 }
 
-// Slice returns the elements in unspecified order.
-// The returned slice is independent from the set.
-// Safe on a nil receiver (returns an empty slice).
-func (s *Set[T]) Slice() []T {
-	n := 0
-	if s != nil {
-		n = len(s.m)
+// AddSet inserts all values from other in its insertion order.
+func (s *Set[T]) AddSet(other *Set[T]) bool {
+	if s == nil || other == nil {
+		return false
 	}
-	out := make([]T, 0, n)
-	if n == 0 {
+	return s.Add(other.Slice()...)
+}
+
+// RemoveSet removes all values found in other.
+func (s *Set[T]) RemoveSet(other *Set[T]) bool {
+	if s == nil || other == nil {
+		return false
+	}
+	return s.Remove(other.Slice()...)
+}
+
+// Union returns a new set containing values from both sets.
+func (s *Set[T]) Union(other *Set[T]) *Set[T] {
+	out := s.Clone()
+	out.AddSet(other)
+	return out
+}
+
+// Intersection returns a new set containing shared values.
+func (s *Set[T]) Intersection(other *Set[T]) *Set[T] {
+	out := New[T]()
+	if s == nil || other == nil {
 		return out
 	}
-	for x := range s.m {
-		out = append(out, x)
-	}
-	return out
-}
-
-// Clone returns a shallow copy of the set.
-// Nil receiver returns an empty set.
-func (s *Set[T]) Clone() *Set[T] {
-	if len(s.m) == 0 {
-		return newWithHint[T](0)
-	}
-	out := newWithHint[T](len(s.m))
-	for x := range s.m {
-		out.m[x] = struct{}{}
-	}
-	return out
-}
-
-// Union returns the union of two sets.
-// Nil receivers/args are treated as empty.
-func (s *Set[T]) Union(o *Set[T]) *Set[T] {
-	na, nb := 0, 0
-	if s != nil {
-		na = len(s.m)
-	}
-	if o != nil {
-		nb = len(o.m)
-	}
-	out := newWithHint[T](na + nb)
-	if na != 0 {
-		for x := range s.m {
-			out.m[x] = struct{}{}
-		}
-	}
-	if nb != 0 {
-		for x := range o.m {
-			out.m[x] = struct{}{}
+	for _, value := range s.Slice() {
+		if other.Has(value) {
+			out.Add(value)
 		}
 	}
 	return out
 }
 
-// Intersection returns the intersection of two sets.
-// Nil receivers/args or empty inputs yield an empty set.
-func (s *Set[T]) Intersection(o *Set[T]) *Set[T] {
-	if o == nil || len(s.m) == 0 || len(o.m) == 0 {
-		return newWithHint[T](0)
+// Difference returns values from s that are not in other.
+func (s *Set[T]) Difference(other *Set[T]) *Set[T] {
+	out := New[T]()
+	if s == nil {
+		return out
 	}
-	a, b := s, o
-	if len(b.m) < len(a.m) {
-		a, b = b, a
-	}
-	out := newWithHint[T](len(a.m)) // cap to smaller
-	for x := range a.m {
-		if _, ok := b.m[x]; ok {
-			out.m[x] = struct{}{}
+	for _, value := range s.Slice() {
+		if !other.Has(value) {
+			out.Add(value)
 		}
 	}
 	return out
 }
 
-// Difference returns the elements in s that are not in o.
-// Nil receiver is empty; nil o is treated as empty.
-func (s *Set[T]) Difference(o *Set[T]) *Set[T] {
-	if len(s.m) == 0 {
-		return newWithHint[T](0)
-	}
-	if len(o.m) == 0 {
-		return s.Clone()
-	}
-	out := newWithHint[T](len(s.m))
-	for x := range s.m {
-		if _, ok := o.m[x]; !ok {
-			out.m[x] = struct{}{}
-		}
-	}
-	return out
-}
-
-// Iterate over the elements in the set, calling the yield function for each element.
+// Iter returns an insertion-ordered iterator.
 func (s *Set[T]) Iter() func(func(T) bool) {
 	return func(yield func(T) bool) {
-		for x := range s.m {
-			if !yield(x) {
+		for _, value := range s.Slice() {
+			if !yield(value) {
 				return
 			}
 		}

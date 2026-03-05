@@ -1,7 +1,7 @@
-// Package fsm provides thin convenience constructors for the finite-state
-// machine packages in this module.
+// Package fsm executes state machines and dispatches transition lifecycle
+// notifications.
 //
-// The facade is intentionally small: it delegates to package-level builders
-// and constructors without adding behavior. For advanced usage, import the
-// specific subpackages directly.
+// A Machine supplies transition behavior. Engine owns only the current state;
+// definitions, persistence, synchronization, and callback scheduling remain
+// injectable concerns.
 package fsm
